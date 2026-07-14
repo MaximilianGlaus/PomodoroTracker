@@ -38,3 +38,4 @@ wasn't sharp enough.
 | [0003](0003-phase-records-not-event-log.md) | Phase records instead of a full event log | Accepted |
 | [0004](0004-record-granularity.md) | Record granularity: event vs. session | **Proposed** |
 | [0005](0005-round-at-analysis-time.md) | Round at analysis time, not at storage time | Accepted |
+| [0006](0006-first-interface-cli.md) | First interface: CLI, behind a UI-agnostic domain | Accepted |

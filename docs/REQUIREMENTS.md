@@ -2,8 +2,9 @@
 
 ## Constraints (non-functional)
 
-- **C-1 Platform independence.** Low-friction use anywhere → drives the architectural
-  decision CLI vs. GUI vs. Web. *Still open — see BACKLOG.*
+- **C-1 Platform independence.** Low-friction use anywhere → the domain must not depend on
+  any one interface. Resolved in ADR-0006: UI-agnostic domain behind a port, CLI as the
+  first (disposable) adapter.
 
 ## V1 — Core
 
