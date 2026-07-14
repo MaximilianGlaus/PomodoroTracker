@@ -39,3 +39,4 @@ wasn't sharp enough.
 | [0004](0004-record-granularity.md) | Record granularity: event vs. session | **Proposed** |
 | [0005](0005-round-at-analysis-time.md) | Round at analysis time, not at storage time | Accepted |
 | [0006](0006-first-interface-cli.md) | First interface: CLI, behind a UI-agnostic domain | Accepted |
+| [0007](0007-core-emits-facts-not-presentation.md) | The core emits facts, the shell chooses presentation | Accepted |

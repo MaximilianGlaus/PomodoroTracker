@@ -23,6 +23,7 @@ Every feature must justify itself against this thesis.
 | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | User stories, acceptance criteria, constraints |
 | [docs/STATES.md](docs/STATES.md) | State machine |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Storage schema |
+| [docs/PORT.md](docs/PORT.md) | Contract between core and shell (commands in, events out) |
 | [docs/decisions/](docs/decisions/) | Architecture Decision Records |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | What's next |
 
