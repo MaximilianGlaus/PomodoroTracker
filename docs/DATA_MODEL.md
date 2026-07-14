@@ -8,19 +8,26 @@ analysis layer decides *how to read it*. Any interpretation baked into stored da
 is a moment where the file is half-updated; a crash at that moment produces corrupt data
 of unknown extent. Appending is atomic and trivial to implement.
 
-## Current working shape — *subject to ADR-0004*
+## Schema — *decided in ADR-0004*
+
+One row per completed phase. A `work` row is appended when the standard duration is
+reached; an `overtime` row is appended when overtime ends. Rows are never linked or
+rewritten.
 
 | Column | Example | Note |
 |---|---|---|
-| `timestamp` | `2026-07-13T12:30:00` | ISO 8601. Marks the **end** of the phase. |
 | `type` | `work` / `overtime` | Meaning is stored, never inferred from the value. |
-| `duration_min` | `25` | Raw minutes. No rounding, no Pomodoro conversion. |
+| `start` | `2026-07-13T12:05:00` | ISO 8601. Beginning of the phase (wall clock). |
+| `end` | `2026-07-13T12:30:00` | ISO 8601. End of the phase (wall clock). |
+| `duration_min` | `25` | **Net** minutes worked. Raw — no rounding, no Pomodoro conversion. |
 
 Conversion to Pomodoros (`30 min → 1.2 → 1`) happens **in the analysis layer**, at query
 time, with the standard duration as a parameter.
 
-## Known consequence: no start time
+## Net vs. gross is recoverable
 
-Storing *end + duration* means the start time is not recoverable when a pause occurred
-(net ≠ gross). A daily timeline plot will place a paused Pomodoro slightly wrong.
-Accept deliberately, or add a `start` column — decide in ADR-0004.
+`duration_min` is net work; `end − start` is the gross wall-clock span. When a pause
+occurred the two diverge, and their difference is the pause time — kept deliberately as
+an efficiency signal and to place blocks correctly on the daily stack plot. Storing both
+is redundant only when nothing was paused; the redundancy is accepted on purpose
+(ADR-0004).

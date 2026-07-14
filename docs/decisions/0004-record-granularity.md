@@ -1,6 +1,6 @@
 # ADR-0004 — Record granularity: event vs. session
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-07-13
 
 ## Context
@@ -32,15 +32,51 @@ Each schema makes some of these a filter-plus-count and others a plain count.
 |---|---|---|
 | 2026-07-13T12:05:00 | 25 | 30 |
 
+**C — one row per phase, with start and end (chosen)**
+
+| type | start | end | duration_min |
+|---|---|---|---|
+| work | 2026-07-13T12:05:00 | 2026-07-13T12:30:00 | 25 |
+| overtime | 2026-07-13T12:30:00 | 2026-07-13T13:00:00 | 30 |
+
 ## Decision
 
-Schema A with beginning anda end timestamp has been chosen. It has the advantage that it works with only appending, and we can save the work that has been done with the initial Pomodoro first and add anything afterwards to it. In the end, for me, I do not need a distinction between the two. The reason why we treat them separately is that the initial block just has to be done 25 minutes, more or less, at once. I mean, of course, allowing for unexpected pauses. But generally, it can't be a series of 10-minute sessions. And we have the overtime because we want to account for it and not have it being lost. So what we gain is the ability to have a point in time where we have accomplished the bits of work. But what I also decided is to have, to save start, starting point, end point, and duration. Because this gives us also some information about efficiency. So if it's being paused all the time, something that's interesting, and this way also the graphic, the stack, if I do a stack plot, it's something that we can consider, like, something that between starting and end point is where we can have the gain in working time.
+**One row per phase (event schema), with an explicit `type`, a `start`, an `end`, and
+`duration_min`.** A `work` row is written the moment the standard duration is reached
+(the WORK → WORK_OVERTIME switch, see STATES.md); if overtime follows, an `overtime` row
+is appended when it ends. Both writes are pure appends — nothing is ever rewritten.
+
+The two rows are deliberately **not linked**. The relationship between a Pomodoro and its
+own overtime is information this project does not need: the target insight only asks *how
+many* Pomodoros and *how much* overtime in total, never *which overtime belonged to which
+Pomodoro*.
+
+Each row stores both `end` and `duration_min`. When no pause occurred these are
+redundant (`end = start + duration_min`); when a pause occurred they diverge — `end −
+start` is the gross wall-clock span, `duration_min` is the net work. The redundancy is
+accepted on purpose: keeping both lets us recover pause time (`gross − net`) as an
+efficiency signal and place blocks correctly on the daily stack plot. The `type` column
+is what lets analysis separate the two target figures; a later `label` (US-6) will attach
+to individual rows.
 
 
 
 ## Consequences
 
-*(TODO — must address at least:)*
-- It does not allow the differentiation between the main worksession and overtime. However this is not needed as far as I can tell.
-- Because we measure in minutes. The interpretation in pomodoros is not hardcoded into the data
-- The distinction between net and gross time usage becomes possible.
+- **Both target figures separate cleanly.** Pomodoros = count of `work` rows; overtime =
+  sum of `duration_min` over `overtime` rows, converted to Pomodoro units at analysis
+  time (ADR-0005). Neither figure is forced into the other.
+- **The work/overtime boundary is stored, not derived.** Because the split lives in two
+  rows, a later change of the standard duration (25 → 50 min) does not corrupt past data:
+  old `work` rows stay one earned Pomodoro each, old `overtime` rows keep their recorded
+  minutes. Only the *conversion to Pomodoro units* re-parameterises — exactly what
+  ADR-0005 defers.
+- **`end` and `duration_min` are intentionally redundant** when no pause occurred. The
+  cost is one extra column; the gain is recoverable pause time and honest placement on
+  the timeline under net ≠ gross.
+- **Overtime is not linked to its parent Pomodoro.** Per-Pomodoro overtime analysis, or a
+  single label spanning both rows, would need a `session_id` or a migration. Accepted
+  because those are deferred (US-6); the daily balance needs no linkage.
+- **Two writes per Pomodoro-with-overtime**, both pure appends. A crash *between* them
+  loses only the un-acknowledged overtime — never the earned Pomodoro, which was already
+  committed at the 25-minute mark.
