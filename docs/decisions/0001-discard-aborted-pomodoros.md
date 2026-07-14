@@ -16,13 +16,10 @@ The definition determines what every later analysis is built on.
 
 ## Decision
 
-Discarded. A Pomodoro counts only once the standard duration is reached.
+Discarded. A Pomodoro counts only once the standard duration is reached. In the future we might add a button that offers to end a pompodoro early.
 
 ## Consequences
 
 - The user is incentivised to adhere to the minimum of 25 minutes.
-- *(TODO: data loss — 24 minutes of real work are recorded as nothing. This sits in
-  tension with the honesty thesis. Name the tension and justify it.)*
-- *(TODO: incentives cut both ways — a user who finishes a task at minute 22 will sit
-  out the remaining three minutes to make the counter ring. The metric starts shaping
-  the behaviour it measures. Harmless here; worth seeing.)*
+- In order to avoid significant data loss a "end early button" might be introduced later
+

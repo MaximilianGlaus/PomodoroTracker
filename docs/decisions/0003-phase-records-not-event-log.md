@@ -20,5 +20,4 @@ One record per completed phase.
 
 ## Consequences
 
-- *(TODO: which later analyses become impossible? What would a migration cost if the
-  answer turns out to be "I do want them"?)*
+It becomes impossible to know how many "real" pomodoros where made in retrospective.

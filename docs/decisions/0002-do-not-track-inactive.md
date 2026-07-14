@@ -6,8 +6,7 @@
 ## Context
 
 The project thesis is "measure what actually happened". Taken literally, that would mean
-recording idle time too. *(TODO: name the apparent contradiction explicitly and resolve
-it — why is not tracking idle time still honest?)*
+recording idle time too. However idle time is not what we are concerned with here.
 
 ## Options
 
@@ -20,4 +19,4 @@ Active phases only. INACTIVE produces no data.
 
 ## Consequences
 
-- *(TODO)*
+Inactive times can only be induced by being the negative of active times. However with the Schema C from ADR-0004 the quetion is sufficiently resolved.

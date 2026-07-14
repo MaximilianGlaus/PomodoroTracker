@@ -24,4 +24,4 @@ standard duration as a parameter.
 
 ## Consequences
 
-- *(TODO)*
+Calculation in pompodoros happens during analysis, the computing burden seems neglegable.
