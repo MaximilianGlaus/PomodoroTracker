@@ -16,10 +16,10 @@ rewritten.
 
 | Column | Example | Note |
 |---|---|---|
-| `type` | `work` / `overtime` | Meaning is stored, never inferred from the value. |
+| `type` | `work` / `work_overtime` | Meaning is stored, never inferred from the value. |
 | `start` | `2026-07-13T12:05:00` | ISO 8601. Beginning of the phase (wall clock). |
 | `end` | `2026-07-13T12:30:00` | ISO 8601. End of the phase (wall clock). |
-| `duration_min` | `25` | **Net** minutes worked. Raw — no rounding, no Pomodoro conversion. |
+| `duration_sec` | `1500` | **Net** seconds worked. Raw — no rounding, no Pomodoro conversion. |
 
 Conversion to Pomodoros (`30 min → 1.2 → 1`) happens **in the analysis layer**, at query
 time, with the standard duration as a parameter.
