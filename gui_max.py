@@ -44,7 +44,9 @@ class GuiPomodoroTracker:
             method()
             self.core.tick()
             self._render()
-            print(f"handler fired {str(method)}, state is now:", self.core.state)
+            print(f"handler fired, earlier state was:", self.core.earlier_state)
+            print(f"handler fired, state is now:", self.core.state)
+
         return handler
     
     def _heartbeat(self):

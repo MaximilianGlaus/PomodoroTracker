@@ -1,6 +1,6 @@
 # ADR-0006 — First interface: CLI, behind a UI-agnostic domain
 
-**Status:** Accepted
+**Status:** Choice of CLE as delivery system superseded by ADR-0008
 **Date:** 2026-07-14
 
 ## Context
