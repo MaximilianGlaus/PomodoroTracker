@@ -10,3 +10,13 @@ __pycache__/
 
 # Runtime data (personal session log, not source)
 session_storage.csv
+
+# Build artifacts (PyInstaller)
+build/
+dist/
+*.spec
+
+# Virtual environments
+venv/
+.venv/
+packaging_venv/

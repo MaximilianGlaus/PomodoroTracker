@@ -1,10 +1,12 @@
 from core import PomodoroTracker
 
 import tkinter as tk
+from pathlib import Path
 
 class GuiPomodoroTracker:
     def __init__(self):
-        self.core = PomodoroTracker()
+        self._compute_storage_path()
+        self.core = PomodoroTracker(self.storage_path)
         self.root = tk.Tk()
         self.root.title(f"Pomodorotracker V{self.core.version_number}")
         self.previous_state = self.core.state
@@ -34,8 +36,8 @@ class GuiPomodoroTracker:
         
         buttonframe.pack(padx=5, pady=5)
 
-
         self._heartbeat()
+    
     
     def _make_handler(self,method):
         def handler():
@@ -44,9 +46,8 @@ class GuiPomodoroTracker:
             method()
             self.core.tick()
             self._render()
-            print(f"handler fired, earlier state was:", self.core.earlier_state)
-            print(f"handler fired, state is now:", self.core.state)
-
+            #print(f"handler fired, earlier state was:", self.core.earlier_state)
+            #print(f"handler fired, state is now:", self.core.state)
         return handler
     
     def _heartbeat(self):
@@ -66,8 +67,9 @@ class GuiPomodoroTracker:
             self.display_text = "Break session overtime"
         elif self.core.state == "work_overtime":
             self.display_text = "Work session overtime:"
+
+
     def _format_time(self):
-        
         if self.core.state == "inactive":
             self.display_time = "--:--"
         elif self.core.state == "work" or self.core.state == "break":
@@ -76,8 +78,7 @@ class GuiPomodoroTracker:
         elif self.core.state == "work_overtime" or self.core.state == "break_overtime":
             min, sec = divmod(abs(int(self.core.remaining_seconds)), 60)
             self.display_time = f"{min:02d}:{sec:02d}"
-
-        
+   
 
     def _render(self):
         self._format_text()
@@ -88,6 +89,11 @@ class GuiPomodoroTracker:
         if self.core.state != self.previous_state:
             self.root.bell()
         self.previous_state = self.core.state
+
+    def _compute_storage_path(self):
+        self.storage_path = Path.home() / "Library" / "Application Support" / "PomodoroTracker" / "sessions.csv"
+        self.storage_path.parent.mkdir(parents=True, exist_ok=True) # @Claude please elaborate a bit more what parents mean in this context.
+
 
 
 

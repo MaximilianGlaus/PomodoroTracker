@@ -6,12 +6,12 @@ import csv
 
 class PomodoroTracker():
     """ A pomodoro style studying/work tracking app."""
-    def __init__(self):
+    def __init__(self, storage_path=Path("session_storage.csv"), pomodoro_length_sec = 25 * 60, break_length_sec = 5 * 60):
         # Initializes the app.
         self.state = "inactive"
         self.earlier_state = None
-        self.pomodoro_length_sec = 25 * 60
-        self.break_length_sec = 5 * 60
+        self.pomodoro_length_sec = pomodoro_length_sec
+        self.break_length_sec = break_length_sec
         self.duration_sec = None
 
         self.end_monotonic = 0
@@ -27,10 +27,10 @@ class PomodoroTracker():
 
         self.dataline = None
 
-        self.path = Path("session_storage.csv")
+        self.storage_path = storage_path
         self.csv_fieldnames = ("type","start","end","duration_sec")
 
-        self.version_number = "0.1.0"
+        self.version_number = "0.1.0" # @Claude is this correct version numbering?
 
 
 
@@ -97,14 +97,14 @@ class PomodoroTracker():
             return self.state
         
     def _check_storage(self):
-        if self.path.exists() == False:
-            with open(self.path,"w", newline="") as f:
+        if self.storage_path.exists() == False:
+            with open(self.storage_path,"w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=self.csv_fieldnames)
                 writer.writeheader()
 
 
     def _save_csv(self):
-        with open(self.path, "a", newline ="") as session_storage:
+        with open(self.storage_path, "a", newline ="") as session_storage:
             writer = csv.DictWriter(session_storage, fieldnames=self.csv_fieldnames)
             writer.writerow(self.dataline)
 
