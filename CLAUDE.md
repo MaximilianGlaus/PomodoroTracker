@@ -16,34 +16,48 @@ they explicitly delegate doc-writing. Application code (`core.py`, `gui_max.py`,
 modules) is theirs to write. `gui_claude.py` is a reference scaffold written *for* them to
 compare against — the owner's own shell is `gui_max.py`; do not overwrite it.
 
+**Teach before you build.** Tooling/config (`.gitignore`, build commands, icon conversion)
+is fair game to just do — *but only if they can read the result afterwards*. Creating an
+artifact that introduces unfamiliar concepts and explaining it after the fact does not
+work for them; they said so explicitly about the CI workflow. When a step involves a new
+concept, name the concept, point at keywords they can look up, and let them do it. They
+would rather watch a video and write it themselves than receive a working file they can't
+read.
+
+They sometimes leave `# @Claude ...` questions inline in the code — answer those when
+encountered.
+
 ## Commands
 
 - **Run the app (GUI):** `python3 gui_max.py` — the Tkinter desktop shell (owner's own
-  implementation, in progress). Tkinter ships with Python; no dependencies, no build step.
-  `gui_claude.py` is the reference scaffold for the same window.
+  implementation). Tkinter ships with Python; the app itself has no dependencies.
+  `gui_claude.py` is a reference scaffold for the same window.
 - **Run the core's CLI harness:** `python3 core.py` — `main()` is a throwaway
   command-driven loop, guarded by `if __name__ == "__main__"` so `import core` does *not*
   run it. Handy for exercising the state machine without the GUI.
-- **Tests:** none yet. The core is testable *without real time*: it reads the clock only in
-  `update_time()` (sets `self.now_monotonic` / `self.now_datetime`); a test can set those
-  directly and assert on `state` / `remaining_seconds` with no `sleep`.
-- Durations in `core.py` are shortened for testing (`pomodoro_length_sec = 14`,
-  `break_length_sec = 5`); real use is `25 * 60` / `5 * 60`.
+- **Tests:** `python3 -m pytest -v`, or a single one with
+  `python3 -m pytest test_core.py::test_paused_time_does_not_accure -v`.
+- **Environment:** a `.venv` exists; dev tooling (pytest, pyinstaller) is pinned in
+  `requirements-dev.txt`. The owner has repeatedly fallen back to the Anaconda interpreter
+  (`/Users/max/anaconda3/bin/python`) — if pytest "isn't installed", that is why.
+- **Build the macOS app:** `pyinstaller --windowed --name PomodoroTracker --icon
+  icon/PomodoroTracker.icns gui_max.py` (from inside the venv). Build from the venv, never
+  Anaconda — Anaconda drags numpy/MKL in and the bundle balloons from ~26 MB to ~250 MB.
 
 ## Architecture
 
 **Documentation is the source of truth, not the code.** The design was deliberately
 front-loaded before any code. Read these before changing behaviour or design:
 
-- `docs/decisions/` — ADRs 0001–0007. Immutable decisions *with their reasoning*. If a
+- `docs/decisions/` — ADRs 0001–0008. Immutable decisions *with their reasoning*. If a
   change contradicts an ADR, that ADR must be superseded by a new one, not silently
   broken. `docs/decisions/README.md` explains the format and the rule that a "no
   drawbacks" Consequences section means the thinking wasn't sharp enough.
 - `docs/PORT.md` — the **contract** between core and shell (living doc, kept current).
 - `docs/STATES.md`, `docs/DATA_MODEL.md`, `docs/GLOSSARY.md`, `docs/REQUIREMENTS.md`.
 
-**Ports-and-adapters is the whole point (ADR-0006).** The domain must not depend on any
-interface:
+**Ports-and-adapters is the whole point (ADR-0006, adapter choice revised by ADR-0008).**
+The domain must not depend on any interface:
 
 - `core.py` (`PomodoroTracker`) is the **domain**: the state machine, timer math, Pomodoro
   rules, and CSV persistence. It must **never** `print`, read `input`, `sleep`, or own a
@@ -66,8 +80,16 @@ interface:
 - **Store facts, compute metrics (ADR-0005/0004).** Rows hold raw seconds and wall-clock
   `start`/`end` (ISO `datetime`); conversion to Pomodoro units and rounding happen only at
   analysis time, with the standard duration as a parameter. Never bake Pomodoro counts or
-  rounding into stored data. Storage is **append-only** — rows appended to
-  `session_storage.csv` (`type,start,end,duration_sec`), never rewritten.
+  rounding into stored data. Storage is **append-only** — rows appended via
+  `csv.DictWriter` (`type,start,end,duration_sec`), never rewritten. `_save_csv` writes the
+  header itself when the file is absent, so the store is self-healing; keep that check
+  *before* the `open(..., "a")`, since append mode creates the file.
+- **Platform knowledge lives in the shell, never the core.** The core *receives* its
+  `storage_path` as a constructor argument (dependency injection, same principle as the
+  clock seam). `gui_max._compute_storage_path` is the only code that knows about macOS —
+  it builds `~/Library/Application Support/PomodoroTracker/sessions.csv` and `mkdir`s the
+  parent. The core's own default is a bare relative path, used only by the CLI harness and
+  overridden in tests. Never hardcode a platform path into `core.py`.
 - **Net ≠ gross.** A pause shifts *when* the timer finishes, not *what* is recorded.
   `resume` implements this by pushing `end_monotonic` forward by the paused duration.
 - **Two time concepts.** `time.monotonic()` measures the countdown (a stopwatch — only
@@ -75,14 +97,45 @@ interface:
   rows. Both are read together in `update_time()`.
 - A Pomodoro is committed at the moment the standard duration is reached (the
   `work → work_overtime` transition), so a crash after that point doesn't lose it.
+- **The clock must not advance while paused.** `tick()` returns early in `"paused"`;
+  without that, `remaining = end - now` keeps growing and paused time is recorded as work.
+- **`_effective_state()` answers "which phase am I really in?"** (returns `earlier_state`
+  when paused). Anything *asking* about the phase — `acknowledge`, `abort`,
+  `_calculate_duration_sec`, `_construct_dataline` — must go through it, or a phase ended
+  while paused is stored with `type="paused"` and a stale duration. Anything *assigning*
+  keeps plain `self.state = ...`. Half-applying this has caused real data corruption twice.
+
+## Testing
+
+`test_core.py` drives the core with a **fake clock**: set `now_monotonic` / `now_datetime`
+directly and call `tick()`, never `update_time()` (that reads the real clock and makes
+tests non-deterministic). No `sleep` anywhere — a full 25-minute Pomodoro plus overtime
+runs in microseconds. The `tracker` fixture takes pytest's built-in `tmp_path` so each test
+gets a disposable CSV and never touches the owner's real history.
+
+Covered: initial state, `start`, elapse into overtime, the overtime→break acknowledge, the
+overtime-drift regression, paused-time accounting, and a CSV round-trip. Not covered:
+`abort`, the full break cycle, anything in the GUI.
 
 ## Current status
 
-Working end-to-end: core state machine, CSV persistence (`save_session` appends rows;
-`abort` from overtime now stores the earned Pomodoro), and a Tkinter GUI with a live
-`after`-driven countdown and an overtime beep. **In progress:** `gui_max.py` — the owner is
-building the shell themselves; treat it as their code and mentor rather than rewrite.
-**Owed:** an ADR recording the pivot to a Tkinter GUI as the v1 interface (ADR-0006 chose
-"CLI first, behind a UI-agnostic domain" — the domain-agnostic part still holds, only the
-chosen adapter changed). **Rough/open:** the `paused` live display, the sub-minute overtime
-rule (still `TODO` in `GLOSSARY.md`), and the CSV header is not managed by code.
+**v0.1.0 is tagged, packaged and in daily use.** Working end-to-end: core state machine,
+CSV persistence, Tkinter GUI with an `after`-driven countdown and overtime beep, bundled
+as a macOS `.app` via PyInstaller (~26 MB from the venv).
+
+**Pending right now:** the repo has no remote yet — the owner has created a GitHub
+repository and is connecting it (`git remote add origin …`, `git push -u origin main`,
+`git push origin --tags`). A GitHub Actions workflow (`.github/workflows/tests.yml`) is
+committed but has never run; the owner does not yet understand it and wants to learn
+Actions/YAML before it goes live. Do not push on their behalf.
+
+**Next up (agreed):** `analysis.py` — a third adapter that only *reads* the CSV, converting
+raw seconds to Pomodoro units at read time (ADR-0005) to produce the target insight
+("17 Pomodoros, +2 overtime"), plus a matplotlib chart with a target line at 15/day from
+the owner's yearly plan. Then this project drops to maintenance and they move to the next
+milestone of their learning roadmap (an LLM-API CLI tool).
+
+**Deferred / known rough edges:** splitting `paused` into a separate "clock running" flag
+instead of a state (planned 0.2.0 refactor — `_effective_state()` is the seam that makes it
+cheap); the sub-minute overtime rule still `TODO` in `GLOSSARY.md`; `STATES.md` says break
+can be paused but the Mermaid diagram lacks that transition.

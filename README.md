@@ -27,6 +27,26 @@ Every feature must justify itself against this thesis.
 | [docs/decisions/](docs/decisions/) | Architecture Decision Records |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | What's next |
 
+## Running it
+
+Requires Python 3.11+ and nothing else — the app is pure standard library
+(Tkinter ships with Python).
+
+```bash
+python3 gui_max.py     # the desktop app
+python3 -m pytest -v   # the test suite (needs pytest)
+```
+
+Completed phases are appended to `~/Library/Application Support/PomodoroTracker/sessions.csv`
+(`type,start,end,duration_sec`) — never rewritten, see [docs/DATA_MODEL.md](docs/DATA_MODEL.md).
+
 ## Status
 
-Design phase. No code yet — by design.
+**v0.1.0 — working and in daily use.** Tkinter desktop app with a live countdown,
+overtime beep and append-only CSV persistence, bundled as a macOS `.app` with
+PyInstaller. The domain (`core.py`) is UI-agnostic and covered by a pytest suite
+that drives it with a fake clock — no `sleep`, no real time.
+
+**Next:** analysis and visualisation of the recorded data (the target insight above);
+splitting the paused state into a separate "clock running" flag (see
+[docs/BACKLOG.md](docs/BACKLOG.md)).
