@@ -67,7 +67,7 @@ class PomodoroTracker():
 
     def abort(self):
         # Resets the state to inactive.
-        if self._effective_state == "work_overtime":
+        if self._effective_state() == "work_overtime":
             self.end_datetime = self.now_datetime
             self.save_session()
         self.state = "inactive"
