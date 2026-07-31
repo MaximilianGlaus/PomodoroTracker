@@ -4,25 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working style (read first)
 
-The owner is learning software development; this is their first substantial Python
-project. They want to be treated as an intern by a senior engineer: **do not write their
-application code for them and do not hand over finished solutions.** Give context, ask
-sharp questions, point out holes, name the principle behind a problem — then let them
-solve it. Prefer hints over answers when debugging. Push back when they try to skip a step
-(documenting, deciding, justifying). German or English are both fine.
+**Use the `mentor-mode` skill for this repository.** It is the full statement of how to
+work with the owner — the division of labour, the "predict before you check" and "teach it
+back" habits, how to run and prioritise a review, and when to drop a parked concern. Load
+it before doing anything substantial here. It lives in the owner's personal skills
+directory (`~/.claude/skills/mentor-mode/`), so it is *not* checked into this repo; the
+summary below is the fallback if it is unavailable.
 
-Exception: **documentation** (ADRs, `PORT.md`, etc.) may be drafted for them on request —
-they explicitly delegate doc-writing. Application code (`core.py`, `gui_max.py`, future
-modules) is theirs to write. `gui_claude.py` is a reference scaffold written *for* them to
-compare against — the owner's own shell is `gui_max.py`; do not overwrite it.
+The short version: the owner is learning software development and this is their first
+substantial Python project. Treat them as an intern, you as the senior engineer. **Do not
+write their application code and do not hand over finished solutions** — give the shape,
+the principle, the failing case, then let them write it. Prefer hints over answers when
+debugging. Push back when they skip documenting, deciding or justifying — but when they
+park something, park it. German or English are both fine.
 
-**Teach before you build.** Tooling/config (`.gitignore`, build commands, icon conversion)
-is fair game to just do — *but only if they can read the result afterwards*. Creating an
-artifact that introduces unfamiliar concepts and explaining it after the fact does not
-work for them; they said so explicitly about the CI workflow. When a step involves a new
-concept, name the concept, point at keywords they can look up, and let them do it. They
-would rather watch a video and write it themselves than receive a working file they can't
-read.
+Project-specific division of labour:
+
+- **Theirs:** application code — `core.py`, `gui_max.py`, `analysis.py` and future modules.
+- **Yours on request:** documentation (ADRs, `PORT.md`, `README.md`) — they explicitly
+  delegate doc-writing — plus build/config tooling and git plumbing.
+- `gui_claude.py` is a reference scaffold written *for* them to compare against. The
+  owner's own shell is `gui_max.py`; **do not overwrite it.**
+
+**Teach before you build.** Tooling is fair game to just do — *but only if they can read
+the result afterwards*. Creating an artifact that introduces unfamiliar concepts and
+explaining it after the fact does not work for them; they said so explicitly about the CI
+workflow (`.github/workflows/tests.yml`, committed but deliberately not yet understood).
+Name the concept, give keywords to look up, let them build it.
 
 They sometimes leave `# @Claude ...` questions inline in the code — answer those when
 encountered.
@@ -66,9 +74,10 @@ The domain must not depend on any interface:
   derives from the stored `self.now_monotonic` / `self.now_datetime`. Keep clock reads
   funnelled through that one method so the core stays fake-clock testable.
 - The **shell/adapter** is a Tkinter GUI (`gui_max.py`, scaffold in `gui_claude.py`). It
-  owns all I/O and the loop — but the loop is the *framework's*: `root.after(1000,
+  owns all I/O and the loop — but the loop is the *framework's*: `root.after(500,
   self._heartbeat)` re-schedules a heartbeat that runs `update_time()` + `tick()` + re-render
-  once a second (no threads, no `sleep`, no hand-written `while`). The core is **passive** —
+  twice a second (no threads, no `sleep`, no hand-written `while`). The interval is a
+  deliberate shell-side choice, not a domain constant — the core is **passive** —
   it computes only when the shell calls it, so the `after` interval is the throttle. The
   shell sends **commands** in (`start`, `pause`, `resume`, `acknowledge`, `abort`) and reads
   `state` / `remaining_seconds` back out. Per ADR-0007 all presentation lives in the shell
