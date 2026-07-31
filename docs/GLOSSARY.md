@@ -27,7 +27,5 @@ not change *what* is recorded.
 Overtime is expressed in Pomodoro units (30 min = 1.2), using standard mathematical
 rounding. Rounding happens **at analysis time, never at storage time** — see ADR-0005.
 
-## Sub-minute rule
 
-*(TODO — decide: is overtime below a threshold recorded at all? If not, state the
-threshold here. Missing rows must be explainable a year from now.)*
+
