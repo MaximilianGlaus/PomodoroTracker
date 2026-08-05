@@ -10,6 +10,7 @@ __pycache__/
 
 # Runtime data (personal session log, not source)
 session_storage.csv
+category_storage.json
 
 # Build artifacts (PyInstaller)
 build/

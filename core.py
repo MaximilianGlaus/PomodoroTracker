@@ -7,7 +7,7 @@ import csv
 class PomodoroTracker():
     """ A pomodoro style studying/work tracking app."""
     def __init__(self, storage_path=Path("session_storage.csv"), pomodoro_length_sec = 25 * 60, break_length_sec = 5 * 60):
-        # Initializes the app.
+        """Initializes the app."""
         self.state = "inactive"
         self.earlier_state = None
         self.pomodoro_length_sec = pomodoro_length_sec
@@ -28,33 +28,35 @@ class PomodoroTracker():
         self.dataline = None
 
         self.storage_path = storage_path
-        self.csv_fieldnames = ("type","start","end","duration_sec")
+        self.csv_fieldnames = ("type","start","end","duration_sec","category_id")
 
-        self.version_number = "0.1.0" # @Claude is this correct version numbering?
+        self.version_number = "0.2.0-dev" 
+        self.current_category_id = None
 
-
-
+    def set_category_id(self, new_category_id):
+        """Updates the category id hold as current"""
+        self.current_category_id = new_category_id
 
     def start(self):
-        # Changes the state to work and starts the timer.
+        """Changes the state to work and starts the timer."""
         self.state = "work"
         self._setup_timer()
 
     def pause(self):
-        # Pauses the work or break state.
+        """Pauses the work or break state."""
         if self.state in ("work", "work_overtime", "break", "break_overtime"):
             self.earlier_state = self.state
             self.state = "paused"
             self.start_pause = self.now_monotonic
     
     def resume(self):
+        """Resumes the work or break state."""
         if self.state == "paused":
-        # Resumes the work or break state.
           self.state = self._effective_state()
           self.end_monotonic = self.end_monotonic + (self.now_monotonic - self.start_pause)
 
     def acknowledge(self):
-        # Changes the states when ending the work or break session.
+        """Changes the states when ending the work or break session."""
         if self._effective_state() == "work_overtime":
             self.end_datetime = self.now_datetime
             self.save_session()
@@ -66,37 +68,40 @@ class PomodoroTracker():
 
 
     def abort(self):
-        # Resets the state to inactive.
+        """Resets the state to inactive."""
         if self._effective_state() == "work_overtime":
             self.end_datetime = self.now_datetime
             self.save_session()
         self.state = "inactive"
 
     def tick(self):
-        # Timer that tracks work or breaks.
+        """Timer that tracks work or breaks."""
         if self.state == "paused":
             return
         self._update_remaining_seconds()
         self._go_overtime() 
 
     def save_session(self):
-        # Saves the dataline to the csv repository.
+        """Saves the dataline to the csv repository."""
         self._calculate_duration_sec()
         self._construct_dataline()
         self._check_storage()
         self._save_csv()
         
     def update_time(self):
+        """Updates monotonic and datetime held by self."""
         self.now_monotonic = time.monotonic()
         self.now_datetime = datetime.now()
 
     def _effective_state(self):
+        """Returns the effective state, irrespective of it being paused or not."""
         if self.state == "paused":
             return self.earlier_state
         else:
             return self.state
         
     def _check_storage(self):
+        """Guarantees the existance of a storage file"""
         if self.storage_path.exists() == False:
             with open(self.storage_path,"w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=self.csv_fieldnames)
@@ -104,6 +109,7 @@ class PomodoroTracker():
 
 
     def _save_csv(self):
+        """Appends data line to the storage csv"""
         with open(self.storage_path, "a", newline ="") as session_storage:
             writer = csv.DictWriter(session_storage, fieldnames=self.csv_fieldnames)
             writer.writerow(self.dataline)
@@ -111,7 +117,7 @@ class PomodoroTracker():
 
 
     def _calculate_duration_sec(self):
-        # Returns the duration of the work session.
+        """Returns the duration of the work session."""
         if self._effective_state() == "work":
             self.duration_sec = self.pomodoro_length_sec
         elif self._effective_state() == "work_overtime":
@@ -119,11 +125,11 @@ class PomodoroTracker():
 
 
     def _construct_dataline(self):
-        # Returns the .csv dataline
-        self.dataline = {"type": self._effective_state(), "start" : self.start_datetime, "end" : self.end_datetime, "duration_sec": self.duration_sec}
+        """Returns the .csv dataline"""
+        self.dataline = {"type": self._effective_state(), "start" : self.start_datetime, "end" : self.end_datetime, "duration_sec" : self.duration_sec, "category_id" : self.current_category_id}
 
     def _go_overtime(self):
-        # Changes the state of break and work to it's overtime counterparts.
+        """Changes the state of break and work to it's overtime counterparts."""
         if self.remaining_seconds > 0:
             return self.remaining_seconds
         elif self.remaining_seconds < 0:
@@ -136,7 +142,7 @@ class PomodoroTracker():
                 self.state = "break_overtime"
 
     def _setup_timer(self):
-        # Sets the end of the timer respective of either work or break state
+        """Sets the end of the timer respective of either work or break state."""
         self.start_datetime = self.now_datetime
         if self._effective_state() == "work":
             self.end_monotonic = self.now_monotonic + self.pomodoro_length_sec
@@ -144,7 +150,7 @@ class PomodoroTracker():
             self.end_monotonic = self.now_monotonic + self.break_length_sec
 
     def _update_remaining_seconds(self):
-        # Moves the second counter forward
+        """Moves the second counter forward."""
         self.remaining_seconds = self.end_monotonic - self.now_monotonic
 
 

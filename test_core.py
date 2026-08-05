@@ -56,6 +56,11 @@ def test_work_overtime_to_break(tracker):
     tracker.acknowledge()
     assert tracker.state == "break"
 
+def advance(tracker, seconds):
+    for _ in range(seconds):
+        tracker.now_monotonic += 1
+        tracker.tick()
+
 def test_paused_time_does_not_accure(tracker):
     """Test the correct function of pausing/resuming"""
     tracker.now_monotonic = 1_000
@@ -66,25 +71,21 @@ def test_paused_time_does_not_accure(tracker):
     tracker.pause()
     original_seconds = tracker.remaining_seconds
     original_end_monotonic = tracker.end_monotonic
-    advanced_time = 0
-    for n in range(30):
-        advanced_time += 1
-        tracker.now_monotonic += 1
-        tracker.tick()
+    advanced_time = 30
+    advance(tracker, advanced_time)
     tracker.resume()
     tracker.tick()
     assert tracker.remaining_seconds == original_seconds
     assert tracker.end_monotonic == original_end_monotonic + advanced_time
 
 def test_csv_storage(tracker):
+    tracker.current_category_id = 0
     tracker.now_monotonic = 1_000
     tracker.pomodoro_length_sec = 15
     tracker.now_datetime = datetime(2026, 7, 30, 9, 29, 41)
     tracker.start()
     tracker.now_datetime = datetime(2026, 7, 30, 9, 54, 41)
-    for n in range(tracker.pomodoro_length_sec + 1):
-        tracker.now_monotonic += 1
-        tracker.tick()
+    advance(tracker, tracker.pomodoro_length_sec + 1)
     with open(tracker.storage_path, "r") as f:
         csv_list = list(csv.DictReader(f))
 
@@ -92,19 +93,19 @@ def test_csv_storage(tracker):
         assert csv_list[0]["start"] == "2026-07-30 09:29:41"
         assert csv_list[0]["end"] == "2026-07-30 09:54:41"
         assert csv_list[0]["duration_sec"] == "15"
+        assert csv_list[0]["category_id"] == str(tracker.current_category_id)
 
 def test_csv_storage_over_time_acknowledge(tracker):
+    tracker.current_category_id = 0
     tracker.now_monotonic = 1_000
     tracker.pomodoro_length_sec = 15
     tracker.now_datetime = datetime(2026, 7, 30, 9, 29, 41)
     tracker.start()
     tracker.now_datetime = datetime(2026, 7, 30, 9, 54, 41)
-    for n in range(tracker.pomodoro_length_sec + 1):
-        tracker.now_monotonic += 1
-        tracker.tick() 
-    for n in range(1_000):
-        tracker.now_monotonic += 1
-        tracker.tick()
+
+    advance(tracker, tracker.pomodoro_length_sec + 1)
+
+    advance(tracker, 1_000)
 
     tracker.now_datetime = datetime(2026, 7, 30, 10, 54, 41)
     tracker.acknowledge()
@@ -116,19 +117,21 @@ def test_csv_storage_over_time_acknowledge(tracker):
         assert csv_list[1]["start"] == "2026-07-30 09:54:41"
         assert csv_list[1]["end"] == "2026-07-30 10:54:41"
         assert csv_list[1]["duration_sec"] == "1001"
+        assert csv_list[0]["category_id"] == str(tracker.current_category_id)
+        assert csv_list[1]["category_id"] == str(tracker.current_category_id)
 
 def test_csv_storage_over_time_abort(tracker):
+    tracker.current_category_id = 0
     tracker.now_monotonic = 1_000
     tracker.pomodoro_length_sec = 15
     tracker.now_datetime = datetime(2026, 7, 30, 9, 29, 41)
     tracker.start()
     tracker.now_datetime = datetime(2026, 7, 30, 9, 54, 41)
-    for n in range(tracker.pomodoro_length_sec + 1):
-        tracker.now_monotonic += 1
-        tracker.tick()
-    for n in range(1_000):
-        tracker.now_monotonic += 1
-        tracker.tick()
+
+    advance(tracker, tracker.pomodoro_length_sec + 1)
+
+    advance(tracker, 1_000)
+
     tracker.now_datetime = datetime(2026, 7, 30, 10, 54, 41)
 
 
@@ -141,13 +144,38 @@ def test_csv_storage_over_time_abort(tracker):
         assert csv_list[1]["start"] == "2026-07-30 09:54:41"
         assert csv_list[1]["end"] == "2026-07-30 10:54:41"
         assert csv_list[1]["duration_sec"] == "1001"
+        assert csv_list[0]["category_id"] == str(tracker.current_category_id)
+        assert csv_list[1]["category_id"] == str(tracker.current_category_id)
 
-    
-    
-    
+def test_csv_storage_over_time_uncategorized_id(tracker):
+    tracker.now_monotonic = 1_000
+    tracker.pomodoro_length_sec = 15
+    tracker.now_datetime = datetime(2026, 7, 30, 9, 29, 41)
+    tracker.start()
+    tracker.now_datetime = datetime(2026, 7, 30, 9, 54, 41)
 
-  
+    advance(tracker, tracker.pomodoro_length_sec + 1)
 
-        
+    advance(tracker, 1_000)
 
+    tracker.now_datetime = datetime(2026, 7, 30, 10, 54, 41)
+
+
+    tracker.abort()
+
+    with open(tracker.storage_path, "r") as f:
+        csv_list = list(csv.DictReader(f))
+        assert csv_list[0]["category_id"] == ""
+        assert csv_list[1]["category_id"] == ""
+
+
+def test_set_category_id(tracker):
+    assert tracker.current_category_id == None
+
+    first_category_id = 0
+    tracker.set_category_id(first_category_id)
+    assert tracker.current_category_id == first_category_id
+    second_category_id = 999999999
+    tracker.set_category_id(second_category_id)
+    assert tracker.current_category_id == second_category_id
 

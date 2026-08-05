@@ -1,5 +1,6 @@
 from core import PomodoroTracker
 
+import sys
 import tkinter as tk
 from pathlib import Path
 
@@ -91,8 +92,19 @@ class GuiPomodoroTracker:
         self.previous_state = self.core.state
 
     def _compute_storage_path(self):
-        self.storage_path = Path.home() / "Library" / "Application Support" / "PomodoroTracker" / "sessions.csv"
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True) # @Claude please elaborate a bit more what parents mean in this context.
+        import os
+
+        env_override = os.environ.get("POMODORO_DATA_DIR")
+        if env_override:
+            data_dir = Path(env_override)
+        elif getattr(sys, "frozen", False):
+            data_dir = Path.home() / "Library" / "Application Support" / "PomodoroTracker" 
+        else:
+            data_dir = Path("/tmp/pomodoro-dev")
+
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self.storage_path = data_dir / "sessions.csv"
+        print(f"[storage] {self.storage_path}")
 
 
 

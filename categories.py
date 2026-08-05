@@ -1,12 +1,27 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+
+from pathlib import Path
+import json
 
 class CircularMergeError(Exception):
     pass
 
 class CategoryStore:
-    def __init__(self):
+    def __init__(self, storage_path=Path("category_storage.json")):
+        """Initializes the categroy store."""
         self.ids_saved = 0
         self.categories = {}
+        self.storage_path = storage_path
+
+    def save_categories(self):
+        data = [asdict(c) for c in self.categories.values()]
+        self.storage_path.write_text(json.dumps(data))
+
+    def load_categories(self):
+        data = json.loads(self.storage_path.read_text())
+        self.categories = {d["id"]:Category(**d) for d in data} # @Claude give me intuitive understanding for the syntax used in the dict creation.
+        self.ids_saved = (max(self.categories.keys())+1)
+
 
     def create_new_category(self, category_name):
         new_category = Category(category_name, self._create_category_id())
@@ -56,12 +71,17 @@ class Category:
 
 def main():
     category_store = CategoryStore()
-    category_store.create_new_category("Admin")
-    category_store.create_new_category("Python")
-    category_store.categories[0].merged_into = 1
+    category_store.create_new_category("first_category")
+    category_store.create_new_category("second_category")   
+    category_store.create_new_category("third_category")
+    category_store.create_new_category("fourth_category") 
+    category_store.save_categories()
+    print(category_store.ids_saved)
+    category_store.load_categories()
+    print(category_store.ids_saved)
+    print(category_store.categories[0])
 
-    category_store.merge_category(1, 0)
-    print(category_store.categories[1].merged_into)
+
 
     
 
