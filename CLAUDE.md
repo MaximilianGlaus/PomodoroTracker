@@ -20,12 +20,10 @@ park something, park it. German or English are both fine.
 
 Project-specific division of labour:
 
-- **Theirs:** application code — `core.py`, `gui_max.py`, `categories.py`, and future
+- **Theirs:** application code — `core.py`, `gui.py`, `categories.py`, and future
   modules.
 - **Yours on request:** documentation (ADRs, `PORT.md`, `README.md`) — they explicitly
   delegate doc-writing — plus build/config tooling and git plumbing.
-- `gui_claude.py` is a reference scaffold written *for* them to compare against. The
-  owner's own shell is `gui_max.py`; **do not overwrite it.**
 - The agreed doc-writing process is: decision reached in chat → you draft in one pass →
   they review the diff. No live word-by-word co-writing — it wastes their time.
 
@@ -40,15 +38,14 @@ encountered.
 
 ## Commands
 
-- **Run the app (GUI):** `python3 gui_max.py` — the Tkinter desktop shell (owner's own
-  implementation). Tkinter ships with Python; the app itself has no runtime dependencies.
-  `gui_claude.py` is a reference scaffold for the same window.
+- **Run the app (GUI):** `python3 gui.py` — the Tkinter desktop shell. Tkinter ships with
+  Python; the app itself has no runtime dependencies.
   - **Storage-path safety.** Since the env-var + `sys.frozen` refactor, a source run
-    (`python3 gui_max.py`) writes to `/tmp/pomodoro-dev/`, **not** the owner's real
+    (`python3 gui.py`) writes to `/tmp/pomodoro-dev/`, **not** the owner's real
     Library folder — the bundled `.app` keeps hitting `~/Library/Application
     Support/PomodoroTracker/`. Every launch prints the resolved path (`[path] ...`); read
     it before pressing Start. To point a source run at any other directory, set
-    `POMODORO_DATA_DIR=/some/path python3 gui_max.py` — inline only, never in `~/.zshrc`.
+    `POMODORO_DATA_DIR=/some/path python3 gui.py` — inline only, never in `~/.zshrc`.
 - **Run the core's CLI harness:** `python3 core.py` — `main()` is a throwaway
   command-driven loop, guarded by `if __name__ == "__main__"` so `import core` does *not*
   run it. Handy for exercising the state machine without the GUI.
@@ -59,7 +56,7 @@ encountered.
   (`/Users/max/anaconda3/bin/python`) — if pytest "isn't installed", that is why. Use
   `.venv/bin/python` explicitly to avoid the trap.
 - **Build the macOS app:** `pyinstaller --windowed --name PomodoroTracker --icon
-  icon/PomodoroTracker.icns gui_max.py` (from inside the venv). Build from the venv, never
+  icon/PomodoroTracker.icns gui.py` (from inside the venv). Build from the venv, never
   Anaconda — Anaconda drags numpy/MKL in and the bundle balloons from ~26 MB to ~250 MB.
 
 ## Architecture
@@ -86,7 +83,7 @@ The domain must not depend on any interface:
   (`time.monotonic()` + `datetime.now()`), which the shell calls each cycle; all timer math
   derives from the stored `self.now_monotonic` / `self.now_datetime`. Keep clock reads
   funnelled through that one method so the core stays fake-clock testable.
-- The **shell/adapter** is a Tkinter GUI (`gui_max.py`, scaffold in `gui_claude.py`). It
+- The **shell/adapter** is a Tkinter GUI (`gui.py`). It
   owns all I/O and the loop — but the loop is the *framework's*: `root.after(500,
   self._heartbeat)` re-schedules a heartbeat that runs `update_time()` + `tick()` + re-render
   twice a second (no threads, no `sleep`, no hand-written `while`). The interval is a
@@ -118,7 +115,7 @@ The domain must not depend on any interface:
 - **Platform knowledge lives in the shell, never the core.** The core *receives* its
   `storage_path` as a constructor argument — and it's a **directory**, not a file:
   `PomodoroTracker` appends `"sessions.csv"` inside `__init__`, `CategoryStore` appends
-  `"category_storage.json"`. `gui_max._compute_storage_path` is the only code that knows
+  `"category_storage.json"`. `gui._compute_storage_path` is the only code that knows
   about macOS and about environments. It uses a **three-layer decision**: (1) env var
   `POMODORO_DATA_DIR` if set → use it; (2) else if `getattr(sys, "frozen", False)` → the
   Library folder (packaged `.app`); (3) else `/tmp/pomodoro-dev/` (source run). Bundled
@@ -176,7 +173,7 @@ where the row was silently never saved. Repo is **public** at
 
 - `categories.py` — `CategoryStore` with JSON persistence, merge/resolve, cycle guard.
 - `core.py` — `set_category_id`, `category_id` column, slot flows through phase saves.
-- `gui_max.py` — three-layer storage-path decision (env var / `sys.frozen` / dev path).
+- `gui.py` — three-layer storage-path decision (env var / `sys.frozen` / dev path).
 - Test suite: 25 green (core + categories + a thin GUI test).
 - ADR-0009 records the surrogate-key decision. PR open on GitHub.
 

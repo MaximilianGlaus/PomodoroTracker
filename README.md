@@ -33,7 +33,7 @@ Requires Python 3.11+ and nothing else — the app is pure standard library
 (Tkinter ships with Python).
 
 ```bash
-python3 gui_max.py     # the desktop app
+python3 gui.py     # the desktop app
 python3 -m pytest -v   # the test suite (needs pytest)
 ```
 

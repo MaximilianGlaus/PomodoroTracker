@@ -7,7 +7,7 @@ from pathlib import Path
 
 class GuiPomodoroTracker:
     def __init__(self, storage_path = None):
-        if storage_path == None:
+        if storage_path is None:
             self._compute_storage_path()
         else:
             self.storage_path = storage_path
@@ -21,9 +21,6 @@ class GuiPomodoroTracker:
         self.display_text = "Inactive"
 
         self.active_categories = []
-        self.current_category = None
-
-
 
         #Widget State
         self.state_label = tk.Label(self.root, text=self.core.state, font=self.main_font)
@@ -75,7 +72,7 @@ class GuiPomodoroTracker:
 
     def _on_new_category(self):
         name = simpledialog.askstring("New category", "Name:")
-        if name == None:
+        if name is None:
             return
         if not name.strip():
             return
@@ -85,11 +82,8 @@ class GuiPomodoroTracker:
         
 
     def _get_combobox_values(self):
-        """Returns the category names"""
-        combobox_values = ["- none -"]
-        for category in self.active_categories:
-            combobox_values.append(category[1])
-        return combobox_values   
+        """Returns the category names, with '- none -' as the uncategorised option."""
+        return ["- none -"] + [name for id, name in self.active_categories]
 
     def _on_category_selected(self, event):
         """Forwards the selected category to the set_category_id function."""
