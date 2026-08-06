@@ -20,11 +20,14 @@ park something, park it. German or English are both fine.
 
 Project-specific division of labour:
 
-- **Theirs:** application code — `core.py`, `gui_max.py`, `analysis.py` and future modules.
+- **Theirs:** application code — `core.py`, `gui_max.py`, `categories.py`, and future
+  modules.
 - **Yours on request:** documentation (ADRs, `PORT.md`, `README.md`) — they explicitly
   delegate doc-writing — plus build/config tooling and git plumbing.
 - `gui_claude.py` is a reference scaffold written *for* them to compare against. The
   owner's own shell is `gui_max.py`; **do not overwrite it.**
+- The agreed doc-writing process is: decision reached in chat → you draft in one pass →
+  they review the diff. No live word-by-word co-writing — it wastes their time.
 
 **Teach before you build.** Tooling is fair game to just do — *but only if they can read
 the result afterwards*. Creating an artifact that introduces unfamiliar concepts and
@@ -38,16 +41,23 @@ encountered.
 ## Commands
 
 - **Run the app (GUI):** `python3 gui_max.py` — the Tkinter desktop shell (owner's own
-  implementation). Tkinter ships with Python; the app itself has no dependencies.
+  implementation). Tkinter ships with Python; the app itself has no runtime dependencies.
   `gui_claude.py` is a reference scaffold for the same window.
+  - **Storage-path safety.** Since the env-var + `sys.frozen` refactor, a source run
+    (`python3 gui_max.py`) writes to `/tmp/pomodoro-dev/`, **not** the owner's real
+    Library folder — the bundled `.app` keeps hitting `~/Library/Application
+    Support/PomodoroTracker/`. Every launch prints the resolved path (`[path] ...`); read
+    it before pressing Start. To point a source run at any other directory, set
+    `POMODORO_DATA_DIR=/some/path python3 gui_max.py` — inline only, never in `~/.zshrc`.
 - **Run the core's CLI harness:** `python3 core.py` — `main()` is a throwaway
   command-driven loop, guarded by `if __name__ == "__main__"` so `import core` does *not*
   run it. Handy for exercising the state machine without the GUI.
-- **Tests:** `python3 -m pytest -v`, or a single one with
-  `python3 -m pytest test_core.py::test_paused_time_does_not_accure -v`.
+- **Tests:** `.venv/bin/python -m pytest -v`, or a single one with
+  `.venv/bin/python -m pytest test_core.py::test_paused_time_does_not_accure -v`.
 - **Environment:** a `.venv` exists; dev tooling (pytest, pyinstaller) is pinned in
   `requirements-dev.txt`. The owner has repeatedly fallen back to the Anaconda interpreter
-  (`/Users/max/anaconda3/bin/python`) — if pytest "isn't installed", that is why.
+  (`/Users/max/anaconda3/bin/python`) — if pytest "isn't installed", that is why. Use
+  `.venv/bin/python` explicitly to avoid the trap.
 - **Build the macOS app:** `pyinstaller --windowed --name PomodoroTracker --icon
   icon/PomodoroTracker.icns gui_max.py` (from inside the venv). Build from the venv, never
   Anaconda — Anaconda drags numpy/MKL in and the bundle balloons from ~26 MB to ~250 MB.
@@ -57,11 +67,14 @@ encountered.
 **Documentation is the source of truth, not the code.** The design was deliberately
 front-loaded before any code. Read these before changing behaviour or design:
 
-- `docs/decisions/` — ADRs 0001–0008. Immutable decisions *with their reasoning*. If a
+- `docs/decisions/` — ADRs 0001–0009. Immutable decisions *with their reasoning*. If a
   change contradicts an ADR, that ADR must be superseded by a new one, not silently
   broken. `docs/decisions/README.md` explains the format and the rule that a "no
-  drawbacks" Consequences section means the thinking wasn't sharp enough.
+  drawbacks" Consequences section means the thinking wasn't sharp enough. Latest:
+  **0009** — labels use surrogate keys so a rename never touches the append-only session
+  log.
 - `docs/PORT.md` — the **contract** between core and shell (living doc, kept current).
+- `docs/PRD.md` — the v0.2.0 product spec (categories + LLM weekly summary).
 - `docs/STATES.md`, `docs/DATA_MODEL.md`, `docs/GLOSSARY.md`, `docs/REQUIREMENTS.md`.
 
 **Ports-and-adapters is the whole point (ADR-0006, adapter choice revised by ADR-0008).**
@@ -79,10 +92,19 @@ The domain must not depend on any interface:
   twice a second (no threads, no `sleep`, no hand-written `while`). The interval is a
   deliberate shell-side choice, not a domain constant — the core is **passive** —
   it computes only when the shell calls it, so the `after` interval is the throttle. The
-  shell sends **commands** in (`start`, `pause`, `resume`, `acknowledge`, `abort`) and reads
-  `state` / `remaining_seconds` back out. Per ADR-0007 all presentation lives in the shell
-  (`format_time` turns signed seconds into `mm:ss` / overtime); the beep is edge-detected in
-  the shell by comparing `state` to the previous frame (the core has no event system yet).
+  shell sends **commands** in (`start`, `pause`, `resume`, `acknowledge`, `abort`,
+  `set_category_id`) and reads `state` / `remaining_seconds` back out. Per ADR-0007 all
+  presentation lives in the shell (`format_time` turns signed seconds into `mm:ss` /
+  overtime); the beep is edge-detected in the shell by comparing `state` to the previous
+  frame (the core has no event system yet).
+- `categories.py` (`CategoryStore`, `Category` dataclass) is a **second domain module**
+  beside `core`. It owns the label vocabulary — create/rename/merge/resolve — and
+  persists as JSON, not CSV: JSON preserves types (int ids, `null` for `merged_into`) and
+  matches the "small mutable structured data" shape. `sessions.csv` stays append-only;
+  `category_storage.json` is mutable reference data (ADR-0009). Deletion is modelled as a
+  **merge with a forwarding pointer** — no session row is ever rewritten. `resolve()`
+  follows the chain; `CircularMergeError` guards both ends. Core stores an opaque
+  `category_id` verbatim on each row — it never imports `categories`.
 
 **Load-bearing invariants** (breaking these silently corrupts the product's premise):
 
@@ -94,11 +116,20 @@ The domain must not depend on any interface:
   header itself when the file is absent, so the store is self-healing; keep that check
   *before* the `open(..., "a")`, since append mode creates the file.
 - **Platform knowledge lives in the shell, never the core.** The core *receives* its
-  `storage_path` as a constructor argument (dependency injection, same principle as the
-  clock seam). `gui_max._compute_storage_path` is the only code that knows about macOS —
-  it builds `~/Library/Application Support/PomodoroTracker/sessions.csv` and `mkdir`s the
-  parent. The core's own default is a bare relative path, used only by the CLI harness and
-  overridden in tests. Never hardcode a platform path into `core.py`.
+  `storage_path` as a constructor argument — and it's a **directory**, not a file:
+  `PomodoroTracker` appends `"sessions.csv"` inside `__init__`, `CategoryStore` appends
+  `"category_storage.json"`. `gui_max._compute_storage_path` is the only code that knows
+  about macOS and about environments. It uses a **three-layer decision**: (1) env var
+  `POMODORO_DATA_DIR` if set → use it; (2) else if `getattr(sys, "frozen", False)` → the
+  Library folder (packaged `.app`); (3) else `/tmp/pomodoro-dev/` (source run). Bundled
+  binary can never accidentally run in dev mode; source can never accidentally hit prod.
+  Never hardcode a platform path into `core.py` or `categories.py`.
+- **The current-category slot never clears via any state transition** — only
+  `set_category_id` writes it. The slot's value at row-save moment is what lands in that
+  row, which is why the same id flows through both the `work` row (saved on
+  `work → work_overtime` transition) and the `work_overtime` row (saved on
+  `acknowledge` / `abort`). Do not add "clear on abort" or "clear on acknowledge"
+  cleverness — it would silently drop the label from the second row of every session.
 - **Net ≠ gross.** A pause shifts *when* the timer finishes, not *what* is recorded.
   `resume` implements this by pushing `end_monotonic` forward by the paused duration.
 - **Two time concepts.** `time.monotonic()` measures the countdown (a stopwatch — only
@@ -120,31 +151,49 @@ The domain must not depend on any interface:
 directly and call `tick()`, never `update_time()` (that reads the real clock and makes
 tests non-deterministic). No `sleep` anywhere — a full 25-minute Pomodoro plus overtime
 runs in microseconds. The `tracker` fixture takes pytest's built-in `tmp_path` so each test
-gets a disposable CSV and never touches the owner's real history.
+gets a disposable directory and never touches the owner's real history. An `advance(tracker,
+n)` helper factors out the `for _ in range(n): now_monotonic += 1; tick()` loop noise — use
+it for any test that walks the clock.
 
-Covered: initial state, `start`, elapse into overtime, the overtime→break acknowledge, the
-overtime-drift regression, paused-time accounting, and a CSV round-trip. Not covered:
-`abort`, the full break cycle, anything in the GUI.
+`test_categories.py` follows the same pattern with `tmp_path` and covers the JSON
+round-trip (save → fresh store → load, merge pointer preserved, id counter restored).
+`test_gui.py` exists but is thin — GUI code is hard to unit-test; prefer running the app
+manually through a click checklist for widget layer changes.
+
+**Testing philosophy in this repo:** DAMP over DRY. Extract the Arrange (fixtures, helpers
+like `advance`) so it has a *name* that documents what it sets up. Keep the Act and Assert
+explicit inline — a failing test should read as one story without jumping to helpers. Rule
+of thumb: the third time you paste the same setup block, extract it.
 
 ## Current status
 
-**v0.1.0 is tagged, packaged and in daily use.** Working end-to-end: core state machine,
-CSV persistence, Tkinter GUI with an `after`-driven countdown and overtime beep, bundled
-as a macOS `.app` via PyInstaller (~26 MB from the venv).
+**Active branch:** `feat/category-labels` (v0.2.0-dev). `v0.1.1` is the last tagged
+release — `v0.1.0` shipped as a `.app`, `v0.1.1` fixed an `abort`-during-overtime bug
+where the row was silently never saved. Repo is **public** at
+`github.com/MaximilianGlaus/PomodoroTracker`, CI runs on every push (`.github/workflows/tests.yml`).
 
-**Pending right now:** the repo has no remote yet — the owner has created a GitHub
-repository and is connecting it (`git remote add origin …`, `git push -u origin main`,
-`git push origin --tags`). A GitHub Actions workflow (`.github/workflows/tests.yml`) is
-committed but has never run; the owner does not yet understand it and wants to learn
-Actions/YAML before it goes live. Do not push on their behalf.
+**On the branch (foundation for v0.2.0):**
 
-**Next up (agreed):** `analysis.py` — a third adapter that only *reads* the CSV, converting
-raw seconds to Pomodoro units at read time (ADR-0005) to produce the target insight
-("17 Pomodoros, +2 overtime"), plus a matplotlib chart with a target line at 15/day from
-the owner's yearly plan. Then this project drops to maintenance and they move to the next
-milestone of their learning roadmap (an LLM-API CLI tool).
+- `categories.py` — `CategoryStore` with JSON persistence, merge/resolve, cycle guard.
+- `core.py` — `set_category_id`, `category_id` column, slot flows through phase saves.
+- `gui_max.py` — three-layer storage-path decision (env var / `sys.frozen` / dev path).
+- Test suite: 25 green (core + categories + a thin GUI test).
+- ADR-0009 records the surrogate-key decision. PR open on GitHub.
 
-**Deferred / known rough edges:** splitting `paused` into a separate "clock running" flag
-instead of a state (planned 0.2.0 refactor — `_effective_state()` is the seam that makes it
-cheap); the sub-minute overtime rule still `TODO` in `GLOSSARY.md`; `STATES.md` says break
-can be paused but the Mermaid diagram lacks that transition.
+**Not yet built:** the GUI category picker (Combobox + "New…" button) — the label
+feature is not user-facing until this lands. Then the LLM weekly-summary integration
+(Phase-1 milestone per the roadmap).
+
+**Deferred / known rough edges:**
+
+- `save_categories` is not atomic — mid-write crash can truncate the file. Fix is a
+  temp-file-plus-`os.replace` pattern; do it next time the method is touched. Note in
+  `BACKLOG.md`.
+- `docs/DATA_MODEL.md` and `docs/STATES.md` predate the `category_id` column and haven't
+  been updated. Draft that when the picker lands.
+- Splitting `paused` into a separate "clock running" flag instead of a state — still
+  planned, `_effective_state()` is the seam that keeps it cheap.
+- `analysis.py` was deferred (see D-0002 in the Administration roadmap): the tracker
+  itself is the Phase-1 vehicle now, and the analysis surface will be a category-aware
+  burn-up chart built after the LLM summary work.
+- `STATES.md` says break can be paused but the Mermaid diagram lacks that transition.

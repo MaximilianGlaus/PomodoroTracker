@@ -1,5 +1,5 @@
 from core import PomodoroTracker
-
+from categories import CategoryStore
 import sys
 import tkinter as tk
 from pathlib import Path
@@ -8,12 +8,17 @@ class GuiPomodoroTracker:
     def __init__(self):
         self._compute_storage_path()
         self.core = PomodoroTracker(self.storage_path)
+        self.category_store = CategoryStore(self.storage_path)
         self.root = tk.Tk()
         self.root.title(f"Pomodorotracker V{self.core.version_number}")
         self.previous_state = self.core.state
         self.main_font = ("Helvetica", 15)
         self.display_time = "--:--"
         self.display_text = "Inactive"
+
+        self.active_categories = []
+
+
 
         #Widgets
         self.state_label = tk.Label(self.root, text=self.core.state, font=self.main_font)
@@ -38,7 +43,12 @@ class GuiPomodoroTracker:
         buttonframe.pack(padx=5, pady=5)
 
         self._heartbeat()
-    
+
+    def _update_active_categories(self):
+        """Returns a filtered list of non-merged pairs of id and name of the categories."""
+        for id in self.category_store.categories:
+            if self.category_store.categories[id].merged_into == None:
+                self.active_categories.append((self.category_store.categories[id].id, self.category_store.categories[id].name))
     
     def _make_handler(self,method):
         def handler():
@@ -103,12 +113,20 @@ class GuiPomodoroTracker:
             data_dir = Path("/tmp/pomodoro-dev")
 
         data_dir.mkdir(parents=True, exist_ok=True)
-        self.storage_path = data_dir / "sessions.csv"
-        print(f"[storage] {self.storage_path}")
+        self.storage_path = data_dir 
+        print(f"[path] {self.storage_path}")
 
 
 
 
 if __name__ == "__main__":
     gui = GuiPomodoroTracker()
-    gui.root.mainloop()
+
+    gui.category_store.create_new_category("first_category")
+    gui.category_store.create_new_category("second_category")   
+    gui.category_store.create_new_category("third_category")
+    gui.category_store.create_new_category("fourth_category")
+    gui.category_store.merge_category(0,1)
+    gui._update_active_categories()
+    print(gui.active_categories)
+    # gui.root.mainloop()

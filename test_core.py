@@ -7,8 +7,7 @@ from datetime import datetime
 @pytest.fixture
 def tracker(tmp_path):
     """An Pomodoro Core that's accessible to all the functions"""
-    path = tmp_path / "sessions.csv"
-    return core.PomodoroTracker(path)
+    return core.PomodoroTracker(tmp_path)
 
 
 def test_correct_start_state(tracker):

@@ -4,8 +4,7 @@ import pytest
 @pytest.fixture()
 def category_store(tmp_path):
     """Creates a pomodoro category store"""
-    path = tmp_path / "category_storage.json"
-    category_store = CategoryStore(path)
+    category_store = CategoryStore(tmp_path)
     category_store.create_new_category("first_category")
     category_store.create_new_category("second_category")   
     category_store.create_new_category("third_category")
@@ -51,7 +50,8 @@ def test_save_load_categories(category_store):
     category_store.merge_category(0, 1)
     category_store.save_categories()
 
-    fresh_category_store = CategoryStore(category_store.storage_path)
+
+    fresh_category_store = CategoryStore(category_store.storage_path.parent)
     fresh_category_store.load_categories()
 
     assert fresh_category_store.categories[0].name == "first_category"

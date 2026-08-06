@@ -7,20 +7,22 @@ class CircularMergeError(Exception):
     pass
 
 class CategoryStore:
-    def __init__(self, storage_path=Path("category_storage.json")):
+    def __init__(self, storage_path=Path("/tmp/pomodoro-dev")):
         """Initializes the categroy store."""
         self.ids_saved = 0
         self.categories = {}
-        self.storage_path = storage_path
+        self.storage_path = storage_path / "category_storage.json"
+        self.load_categories()
 
     def save_categories(self):
         data = [asdict(c) for c in self.categories.values()]
         self.storage_path.write_text(json.dumps(data))
 
     def load_categories(self):
-        data = json.loads(self.storage_path.read_text())
-        self.categories = {d["id"]:Category(**d) for d in data} # @Claude give me intuitive understanding for the syntax used in the dict creation.
-        self.ids_saved = (max(self.categories.keys())+1)
+        if self.storage_path.exists():
+            data = json.loads(self.storage_path.read_text())
+            self.categories = {d["id"]:Category(**d) for d in data} # @Claude give me intuitive understanding for the syntax used in the dict creation.
+            self.ids_saved = (max(self.categories.keys())+1)
 
 
     def create_new_category(self, category_name):
@@ -75,11 +77,13 @@ def main():
     category_store.create_new_category("second_category")   
     category_store.create_new_category("third_category")
     category_store.create_new_category("fourth_category") 
+    category_store.merge_category(0, 1)
     category_store.save_categories()
-    print(category_store.ids_saved)
-    category_store.load_categories()
-    print(category_store.ids_saved)
-    print(category_store.categories[0])
+    print(category_store.storage_path.parent)
+    
+    fresh_category_store = CategoryStore()
+    fresh_category_store.load_categories
+    print(fresh_category_store.categories[0].name)
 
 
 

@@ -6,7 +6,7 @@ import csv
 
 class PomodoroTracker():
     """ A pomodoro style studying/work tracking app."""
-    def __init__(self, storage_path=Path("session_storage.csv"), pomodoro_length_sec = 25 * 60, break_length_sec = 5 * 60):
+    def __init__(self, storage_path = Path("/tmp/pomodoro-dev"), pomodoro_length_sec = 25 * 60, break_length_sec = 5 * 60):
         """Initializes the app."""
         self.state = "inactive"
         self.earlier_state = None
@@ -19,7 +19,6 @@ class PomodoroTracker():
         self.start_datetime = None
         self.end_datetime = None
 
-        
 
         self.remaining_seconds = 0
         self.now_monotonic = time.monotonic()
@@ -27,7 +26,7 @@ class PomodoroTracker():
 
         self.dataline = None
 
-        self.storage_path = storage_path
+        self.storage_path = storage_path / "sessions.csv"
         self.csv_fieldnames = ("type","start","end","duration_sec","category_id")
 
         self.version_number = "0.2.0-dev" 
