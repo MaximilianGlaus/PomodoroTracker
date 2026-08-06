@@ -21,7 +21,7 @@ class CategoryStore:
     def load_categories(self):
         if self.storage_path.exists():
             data = json.loads(self.storage_path.read_text())
-            self.categories = {d["id"]:Category(**d) for d in data} # @Claude give me intuitive understanding for the syntax used in the dict creation.
+            self.categories = {d["id"]:Category(**d) for d in data}
             self.ids_saved = (max(self.categories.keys())+1)
 
 

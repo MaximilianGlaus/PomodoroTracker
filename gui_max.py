@@ -2,11 +2,15 @@ from core import PomodoroTracker
 from categories import CategoryStore
 import sys
 import tkinter as tk
+from tkinter import ttk, simpledialog
 from pathlib import Path
 
 class GuiPomodoroTracker:
-    def __init__(self):
-        self._compute_storage_path()
+    def __init__(self, storage_path = None):
+        if storage_path == None:
+            self._compute_storage_path()
+        else:
+            self.storage_path = storage_path
         self.core = PomodoroTracker(self.storage_path)
         self.category_store = CategoryStore(self.storage_path)
         self.root = tk.Tk()
@@ -17,16 +21,41 @@ class GuiPomodoroTracker:
         self.display_text = "Inactive"
 
         self.active_categories = []
+        self.current_category = None
 
 
 
-        #Widgets
+        #Widget State
         self.state_label = tk.Label(self.root, text=self.core.state, font=self.main_font)
         self.state_label.pack(padx=5,pady=5)
 
+        #Widget Time
         self.time_label = tk.Label(self.root, text=self.core.remaining_seconds, font=self.main_font)
         self.time_label.pack(padx=5,pady=5)
 
+        #Widget Category
+        category_frame = tk.Frame(self.root)
+        tk.Label(category_frame, text="Current category:", font=self.main_font).pack(side=tk.LEFT)
+
+        self.categories_combobox = ttk.Combobox(
+            category_frame,
+            values=self._get_combobox_values(),
+            state="readonly",
+            font=self.main_font,
+        )
+        self.categories_combobox.pack(side=tk.LEFT, padx=5)
+        self.categories_combobox.bind("<<ComboboxSelected>>", self._on_category_selected)
+
+        #Widget New Category
+        self.new_categories_button = tk.Button(category_frame, text="Add new category", command = self._on_new_category, font=self.main_font)
+        self.new_categories_button.pack(side=tk.LEFT, padx=5)
+    
+
+        category_frame.pack(padx=5,pady=5)
+
+
+
+        #Widget Action Buttons
         buttonframe = tk.Frame(self.root)
 
         commands = [["Start", self.core.start],
@@ -44,11 +73,48 @@ class GuiPomodoroTracker:
 
         self._heartbeat()
 
+    def _on_new_category(self):
+        name = simpledialog.askstring("New category", "Name:")
+        if name == None:
+            return
+        if not name.strip():
+            return
+        self.category_store.create_new_category(name)
+        self.category_store.save_categories()
+        self._refresh_categories()
+        
+
+    def _get_combobox_values(self):
+        """Returns the category names"""
+        combobox_values = ["- none -"]
+        for category in self.active_categories:
+            combobox_values.append(category[1])
+        return combobox_values   
+
+    def _on_category_selected(self, event):
+        """Forwards the selected category to the set_category_id function."""
+        selected_category_name = self.categories_combobox.get()
+        self.core.set_category_id(self._resolve_category_id(selected_category_name))
+
+
+
+    def _resolve_category_id(self, selected_category_name):
+        """Receives the drop down selection, returns the category_id."""
+        if selected_category_name == "- none -":
+            return None
+        else:
+            for id, name in self.active_categories:
+                if name == selected_category_name:
+                    return id
+
+    def _refresh_categories(self):
+        """Updates all occurences of categories in the gui."""
+        self._update_active_categories()
+        self.categories_combobox["values"] = self._get_combobox_values()
+
     def _update_active_categories(self):
-        """Returns a filtered list of non-merged pairs of id and name of the categories."""
-        for id in self.category_store.categories:
-            if self.category_store.categories[id].merged_into == None:
-                self.active_categories.append((self.category_store.categories[id].id, self.category_store.categories[id].name))
+        """Attributes to self a filtered list of non-merged pairs of id and name of the categories."""
+        self.active_categories = [(c.id, c.name) for c in self.category_store.categories.values()  if c.merged_into is None]
     
     def _make_handler(self,method):
         def handler():
@@ -121,12 +187,4 @@ class GuiPomodoroTracker:
 
 if __name__ == "__main__":
     gui = GuiPomodoroTracker()
-
-    gui.category_store.create_new_category("first_category")
-    gui.category_store.create_new_category("second_category")   
-    gui.category_store.create_new_category("third_category")
-    gui.category_store.create_new_category("fourth_category")
-    gui.category_store.merge_category(0,1)
-    gui._update_active_categories()
-    print(gui.active_categories)
-    # gui.root.mainloop()
+    gui.root.mainloop()
