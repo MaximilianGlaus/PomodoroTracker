@@ -164,30 +164,53 @@ of thumb: the third time you paste the same setup block, extract it.
 
 ## Current status
 
-**Active branch:** `feat/category-labels` (v0.2.0-dev). `v0.1.1` is the last tagged
-release — `v0.1.0` shipped as a `.app`, `v0.1.1` fixed an `abort`-during-overtime bug
-where the row was silently never saved. Repo is **public** at
-`github.com/MaximilianGlaus/PomodoroTracker`, CI runs on every push (`.github/workflows/tests.yml`).
+**Active branch:** `main` (v0.2.0-dev in `core.py`, not yet tagged). The label feature
+landed via fast-forward merge on 06.08.2026 — six commits, all pushed. `v0.1.1` is the
+last tagged release; `v0.2.0` will be the next tag once the `.app` is rebuilt. Repo is
+**public** at `github.com/MaximilianGlaus/PomodoroTracker`, CI runs on every push
+(`.github/workflows/tests.yml`).
 
-**On the branch (foundation for v0.2.0):**
+**Label feature is user-facing and functionally complete:**
 
-- `categories.py` — `CategoryStore` with JSON persistence, merge/resolve, cycle guard.
-- `core.py` — `set_category_id`, `category_id` column, slot flows through phase saves.
-- `gui.py` — three-layer storage-path decision (env var / `sys.frozen` / dev path).
-- Test suite: 25 green (core + categories + a thin GUI test).
-- ADR-0009 records the surrogate-key decision. PR open on GitHub.
+- `categories.py` — `CategoryStore` with JSON persistence, merge/resolve, `CircularMergeError`.
+- `core.py` — `set_category_id(id)` writes an opaque slot; `category_id` flows through
+  work and work_overtime rows.
+- `gui.py` — `ttk.Combobox` picker with "- none -" option, "Add new category" button via
+  `simpledialog.askstring`, `_refresh_categories` as the single sync method. Three-layer
+  storage-path decision (env var / `sys.frozen` / dev path).
+- Tests: 21 green (core + categories + 3 GUI tests, using DI at the GUI level for
+  isolation).
+- ADR-0009 records the surrogate-key decision.
 
-**Not yet built:** the GUI category picker (Combobox + "New…" button) — the label
-feature is not user-facing until this lands. Then the LLM weekly-summary integration
-(Phase-1 milestone per the roadmap).
+**Data on disk (as of 06.08.2026):**
+
+- `~/Library/Application Support/PomodoroTracker/sessions.csv` — 61 rows migrated to the
+  new 5-column format (`type,start,end,duration_sec,category_id`). Legacy rows carry
+  empty `category_id`. Backup at `sessions.csv.backup-2026-08-06`.
+- `category_storage.json` — starts empty in dev; created on first `save_categories()`.
+
+**Immediate next steps** (in order):
+
+1. `.venv/bin/pyinstaller --noconfirm Cococlock.spec` — rebuild the `.app` (uses the
+   `Cococlock` name and the existing icon).
+2. Smoke-test `dist/Cococlock.app`, then replace the daily-use one in `/Applications`.
+3. Bump `version_number` in `core.py` from `"0.2.0-dev"` to `"0.2.0"`, commit.
+4. `git tag v0.2.0 && git push origin v0.2.0`.
+5. Manually close the orphaned PR `feat/category-labels` on GitHub with a "merged locally"
+   note.
+6. Then the actual Phase-1 milestone: **first LLM API call** — untouched all week.
 
 **Deferred / known rough edges:**
 
-- `save_categories` is not atomic — mid-write crash can truncate the file. Fix is a
-  temp-file-plus-`os.replace` pattern; do it next time the method is touched. Note in
-  `BACKLOG.md`.
+- `save_categories` is not atomic — mid-write crash can truncate the file. Fix is
+  temp-file + `os.replace`; do it next time the method is touched.
+- **Schema-ADR** for the `category_id` column change still to be drafted (was flagged
+  when the wiring landed, never happened).
 - `docs/DATA_MODEL.md` and `docs/STATES.md` predate the `category_id` column and haven't
-  been updated. Draft that when the picker lands.
+  been updated.
+- **Rename/merge in the GUI** deliberately deferred to v0.2.1 (or never — decide on
+  evidence). Both operations exist on `CategoryStore` and are tested; no UI hook yet.
+- `_on_new_category` has no test coverage (needs mocking of `simpledialog.askstring`).
 - Splitting `paused` into a separate "clock running" flag instead of a state — still
   planned, `_effective_state()` is the seam that keeps it cheap.
 - `analysis.py` was deferred (see D-0002 in the Administration roadmap): the tracker
