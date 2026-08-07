@@ -22,14 +22,14 @@ class PomodoroTracker():
 
         self.remaining_seconds = 0
         self.now_monotonic = time.monotonic()
-        self.now_datetime = datetime.now()
+        self.now_datetime = datetime.now().replace(microsecond=0)
 
         self.dataline = None
 
         self.storage_path = storage_path / "sessions.csv"
         self.csv_fieldnames = ("type","start","end","duration_sec","category_id")
 
-        self.version_number = "0.2.1" 
+        self.version_number = "0.2.2" 
         self.current_category_id = None
 
     def set_category_id(self, new_category_id):
@@ -90,7 +90,7 @@ class PomodoroTracker():
     def update_time(self):
         """Updates monotonic and datetime held by self."""
         self.now_monotonic = time.monotonic()
-        self.now_datetime = datetime.now()
+        self.now_datetime = datetime.now().replace(microsecond=0)
 
     def _effective_state(self):
         """Returns the effective state, irrespective of it being paused or not."""
@@ -183,6 +183,7 @@ def main():
         
         app.update_time()
         app.tick()
+        print(app.now_datetime)
 
 
 if __name__ == "__main__":
