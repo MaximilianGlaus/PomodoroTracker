@@ -125,7 +125,7 @@ class PomodoroTracker():
 
     def _construct_dataline(self):
         """Returns the .csv dataline"""
-        self.dataline = {"type": self._effective_state(), "start" : self.start_datetime, "end" : self.end_datetime, "duration_sec" : self.duration_sec, "category_id" : self.current_category_id}
+        self.dataline = {"type": self._effective_state(), "start" : self.start_datetime, "end" : self.end_datetime, "duration_sec" : round(self.duration_sec), "category_id" : self.current_category_id}
 
     def _go_overtime(self):
         """Changes the state of break and work to it's overtime counterparts."""
