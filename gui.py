@@ -22,6 +22,7 @@ class GuiPomodoroTracker:
 
         self.active_categories = []
 
+
         #Widget State
         self.state_label = tk.Label(self.root, text=self.core.state, font=self.main_font)
         self.state_label.pack(padx=5,pady=5)
@@ -67,7 +68,7 @@ class GuiPomodoroTracker:
             button.grid(row=0,column=column, sticky=tk.W+tk.E)
         
         buttonframe.pack(padx=5, pady=5)
-
+        self._refresh_categories()
         self._heartbeat()
 
     def _on_new_category(self):
