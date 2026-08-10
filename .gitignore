@@ -16,7 +16,8 @@ category_storage.json
 build/
 dist/
 *.spec
-
+# Environments
+.env
 # Virtual environments
 venv/
 .venv/

@@ -42,3 +42,4 @@ wasn't sharp enough.
 | [0007](0007-core-emits-facts-not-presentation.md) | The core emits facts, the shell chooses presentation | Accepted |
 | [0008](0008-tkinter-as-v1-interface.md) | Tkinter as the v1 interface | Accepted |
 | [0009](0009-surrogate-keys-for-labels.md) | Labels are referenced by surrogate key | Accepted |
+| [0010](0010-category-id-column-on-sessions.md) | `category_id` as a fifth column on `sessions.csv` | Accepted |
