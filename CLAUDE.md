@@ -164,56 +164,73 @@ of thumb: the third time you paste the same setup block, extract it.
 
 ## Current status
 
-**Active branch:** `main` (v0.2.0-dev in `core.py`, not yet tagged). The label feature
-landed via fast-forward merge on 06.08.2026 — six commits, all pushed. `v0.1.1` is the
-last tagged release; `v0.2.0` will be the next tag once the `.app` is rebuilt. Repo is
-**public** at `github.com/MaximilianGlaus/PomodoroTracker`, CI runs on every push
-(`.github/workflows/tests.yml`).
+**Active branch:** `feat/llm-weekly-summary` (off `main`, not yet pushed). `main` is at
+`v0.2.3` — three patch releases (label-loading fix, CSV datetime/duration rounding to
+whole seconds) shipped after the v0.2.0 label feature. ADR-0010 (the `category_id` CSV
+column) is written and on `main`. Repo is **public** at
+`github.com/MaximilianGlaus/PomodoroTracker`, CI runs on every push.
 
-**Label feature is user-facing and functionally complete:**
+**Label feature (v0.2.0–v0.2.3): done, shipped, not the current focus.** `categories.py`
++ `core.py` wiring + `gui.py` picker all work; see ADR-0009/0010 for the design. Not
+touched this session.
 
-- `categories.py` — `CategoryStore` with JSON persistence, merge/resolve, `CircularMergeError`.
-- `core.py` — `set_category_id(id)` writes an opaque slot; `category_id` flows through
-  work and work_overtime rows.
-- `gui.py` — `ttk.Combobox` picker with "- none -" option, "Add new category" button via
-  `simpledialog.askstring`, `_refresh_categories` as the single sync method. Three-layer
-  storage-path decision (env var / `sys.frozen` / dev path).
-- Tests: 21 green (core + categories + 3 GUI tests, using DI at the GUI level for
-  isolation).
-- ADR-0009 records the surrogate-key decision.
+**Current work: the LLM feature, `analysis.py` — a new module, in progress on the
+`feat/llm-weekly-summary` branch.** This is the "Phase-1 milestone" the old status
+section below used to call out as untouched — it's now well underway.
 
-**Data on disk (as of 06.08.2026):**
+**What the LLM feature actually is (see `docs/PRD.md` for the full spec, kept current):**
+A **live progress mirror**, not a weekly batch report — the PRD pivoted on 11.08.2026 from
+"weekly summary" to "always-visible indicator, refreshed on app launch/break." The LLM's
+job is to *report*, not coach (the "Mirror, not accountability" decision from 05.08. still
+holds). Two zones, deliberately split:
+- **Python computes and must get exactly right:** today's progress fraction
+  (`today_total / target_by_day`, target hardcoded at 15 Pomodoros = 22 500s for now) —
+  this is the PRD's one strictly testable Success Criterion.
+- **The LLM gets raw daily data and does the rest:** narrates progress, and is trusted to
+  spot two patterns itself (missed weekday, weekend work) from the last 7 days' data —
+  a deliberate trade-off (no separate tested Python detectors for those two, to fit the
+  3-day KW33 build budget), written down with reasoning in the PRD change log, not silent.
 
-- `~/Library/Application Support/PomodoroTracker/sessions.csv` — 61 rows migrated to the
-  new 5-column format (`type,start,end,duration_sec,category_id`). Legacy rows carry
-  empty `category_id`. Backup at `sessions.csv.backup-2026-08-06`.
-- `category_storage.json` — starts empty in dev; created on first `save_categories()`.
+**`analysis.py` — built and verified so far:**
+- `SessionRecord` (dataclass) + `_load_session_records_csv` — CSV → typed records.
+- `_session_records_group_by_days` — flat `dict[str_date, list[SessionRecord]]`.
+- `Day` (dataclass: date, weekday name, duration_total, duration_per_category) +
+  `_update_days` — one `Day` per date, verified by hand against real data.
+- `_update_days_worked_last_week` → `self.last_week`, a `dict[str_date, Day]` for the
+  last 7 days.
+- `_update_today` / `_update_todays_progess` → `self.today` (raw `SessionRecord` list for
+  today) and `self.todays_progess` (int, read from `self.days[today].duration_total` —
+  **do not** re-sum from raw records, that was a real bug, fixed).
+- Not yet built: the prompt-assembly function (take `self.today` + `self.last_week`,
+  build the `messages` list) and the actual API call. The mechanics for the API call
+  already exist as a working spike in the **sibling folder**
+  `../openAI_request_test/api_call.py` (outside this repo, own `.venv`, has a working
+  `Authorization: Bearer` POST to `/v1/chat/completions`) — port the pattern in, don't
+  start from scratch.
 
-**Immediate next steps** (in order):
+**Known loose ends in `analysis.py` right now:**
+- Two debug `print`s left in (`_update_today`, `_update_todays_progess`) — cosmetic.
+- `real sessions.csv` was cleaned in place (decimals stripped from `start`/`end`/
+  `duration_sec`) on 11.08.; backup at
+  `~/Library/Application Support/PomodoroTracker/sessions.csv.backup-2026-08-11`.
+- A `sessions.csv` copy also sits untracked in the repo root (test fixture, gitignored
+  pattern not yet confirmed — check before committing).
+- **Uncommitted as of this update:** `analysis.py`, `docs/PRD.md` (this session's PRD
+  cleanup), a trivial whitespace-only diff in `gui.py`. Not yet committed to
+  `feat/llm-weekly-summary` — do that first thing.
 
-1. `.venv/bin/pyinstaller --noconfirm Cococlock.spec` — rebuild the `.app` (uses the
-   `Cococlock` name and the existing icon).
-2. Smoke-test `dist/Cococlock.app`, then replace the daily-use one in `/Applications`.
-3. Bump `version_number` in `core.py` from `"0.2.0-dev"` to `"0.2.0"`, commit.
-4. `git tag v0.2.0 && git push origin v0.2.0`.
-5. Manually close the orphaned PR `feat/category-labels` on GitHub with a "merged locally"
-   note.
-6. Then the actual Phase-1 milestone: **first LLM API call** — untouched all week.
-
-**Deferred / known rough edges:**
+**Deferred / known rough edges (unrelated to current work, still true):**
 
 - `save_categories` is not atomic — mid-write crash can truncate the file. Fix is
   temp-file + `os.replace`; do it next time the method is touched.
-- **Schema-ADR** for the `category_id` column change still to be drafted (was flagged
-  when the wiring landed, never happened).
 - `docs/DATA_MODEL.md` and `docs/STATES.md` predate the `category_id` column and haven't
   been updated.
-- **Rename/merge in the GUI** deliberately deferred to v0.2.1 (or never — decide on
-  evidence). Both operations exist on `CategoryStore` and are tested; no UI hook yet.
+- **Rename/merge in the GUI** deliberately deferred (decide on evidence). Both operations
+  exist on `CategoryStore` and are tested; no UI hook yet.
 - `_on_new_category` has no test coverage (needs mocking of `simpledialog.askstring`).
 - Splitting `paused` into a separate "clock running" flag instead of a state — still
   planned, `_effective_state()` is the seam that keeps it cheap.
-- `analysis.py` was deferred (see D-0002 in the Administration roadmap): the tracker
-  itself is the Phase-1 vehicle now, and the analysis surface will be a category-aware
-  burn-up chart built after the LLM summary work.
 - `STATES.md` says break can be paused but the Mermaid diagram lacks that transition.
+- No tests yet for `analysis.py` (`test_analysis.py` does not exist) — the codebase's
+  established pattern (fake data via `tmp_path`, DAMP-style AAA, see `test_core.py`) should
+  extend here once the pipeline settles.
