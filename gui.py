@@ -110,7 +110,7 @@ class GuiPomodoroTracker:
     def _update_active_categories(self):
         """Attributes to self a filtered list of non-merged pairs of id and name of the categories."""
         self.active_categories = [(c.id, c.name) for c in self.category_store.categories.values()  if c.merged_into is None]
-    
+        
     def _make_handler(self,method):
         def handler():
             self.core.update_time()

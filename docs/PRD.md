@@ -5,7 +5,7 @@
 | Status | Draft |
 | Owner | Max |
 | Created | 2026-08-05 |
-| Milestone | Tracker v0.2.0 with LLM weekly summary |
+| Milestone | Tracker v0.2.0 with live LLM progress indicator |
 | References | Administration `decisions.md` D-0002 · [REQUIREMENTS.md](REQUIREMENTS.md) US-5/US-6 |
 
 ## Change Log
@@ -15,6 +15,8 @@
 | 2026-08-05 | Created: vision + empty scaffold. Sections below are written by Max. |
 | 2026-08-05 | First drafts added (problem / MVP / success criteria). Document translated to English (project docs are kept in English). |
 | 2026-08-05 | Structure slimmed: Non-Goals merged into "Out of Scope / Later"; Cut Line reduced to one line; the anomaly set is stated once (Success Criteria) and referenced from the MVP. |
+| 2026-08-11 | LLM requirement to report on +/- 25% effort was replaced with live progress tracking. |
+| 2026-08-11 | Pivot: feature is a live, always-visible progress indicator (today + 7-day retrospective) refreshed on app launch/break, not a weekly batch summary. Reasoning: a live signal during the day is more actionable than a retrospective report. Trade-off accepted: the two pattern checks (missing weekday, weekend work) are left to the LLM's own reading of the daily data rather than built as separate tested Python functions — saves build time within the KW33 3-day cap, at the cost of guaranteed-correct detection for those two. |
 
 ---
 
@@ -37,19 +39,19 @@ The self-taught learner might measure his time investment, however measured data
 > The thinnest end-to-end value that points toward the vision and is buildable *now*.
 > Core decision (05.08.): **Mirror**, not accountability.
 
-An LLM instance reports the work done and names gaps and achievements. (The specific, testable anomalies it must name are listed once, under Success Criteria.)
+An LLM instance reports the work done and names gaps and achievements — for the progress of the current day and retrospectively for the last 7 days. The model gets called at startup and at break, unless there has already been a call with the same stats (launch > api-call > shutdown (no Pomodoro completed) > relaunch > no api-call).
+(The specific, testable anomalies it must name are listed once, under Success Criteria.)
 
 ## Success Criteria (measurable)
 
 > How do you recognize *in binary terms* that v0.2.0 is done? Testable, not "nice".
 
-An LLM instance reports autonomously on the learning history and names anomalies with useful latency (<2sec).
+An LLM instance reports autonomously on the learning history and names anomalies with useful latency (<15sec).
 
 It successfully identifies all patterns in a test set:
-
 - Weekdays missing work.
 - Weekend days with work.
-- Weekdays with more than 25% deviation from the rest.
+- Correctly reports daily progress (`today_total / target_by_day`) towards the daily target (hardcoded 15 x Pomodoros for now).
 
 ## Scope + Cut Line
 
@@ -57,7 +59,7 @@ It successfully identifies all patterns in a test set:
 
 **In scope**
 - GUI integration of the category labels: selection interface with a drop-down menu.
-- LLM weekly-summary reporting (the Mirror — see MVP / Success Criteria).
+- LLM live progress + 7-day retrospective reporting (the Mirror — see MVP / Success Criteria).
 
 **Timeline (D-0002):** foundation (category GUI) done by **Fri 07.08.**, LLM reporting from **Mon 10.08.** Whatever is not standing by Friday gets cut, not extended.
 
@@ -77,6 +79,7 @@ OpenAI GPT-5 Nano has been chosen after some research, however in the end it is 
 
 > Deliberately not in v0.2.0 — the single home for non-goals and future ideas, so they don't creep into scope. See also [BACKLOG.md](BACKLOG.md).
 
+- Pomodoro Settings to be adjustable (Lenght, Targets, Days etc)
 - Run models locally.
 - Transcription feature for user input.
 - Give the LLM access to study plans.

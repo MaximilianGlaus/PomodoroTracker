@@ -25,12 +25,11 @@ class SessionsAnalysis:
         self.session_records = None
         self.storage_path = storage_path / "sessions.csv"
         self.target_by_day = 22_500
-        self.today = {}
+        self.today = None
         self.todays_progess = 0
         self.sessions_by_days = {}
         self.days = {}
         self.last_week = {}
-        self.average_work_last_week = 0
 
     def _load_session_records_csv(self):
         if self.storage_path.exists():
@@ -87,12 +86,12 @@ class SessionsAnalysis:
         today = datetime.today()
         if today.strftime("%Y-%m-%d") in list(self.sessions_by_days.keys()):
             self.today = self.sessions_by_days[today.strftime("%Y-%m-%d")]
-        print(self.today)
+        print(type(self.today))
 
     def _update_todays_progess(self):
-        self.todays_progess = 0
-        for sessions in self.today:
-            self.todays_progess +=sessions.duration_sec
+        today = datetime.today()
+        if today.strftime("%Y-%m-%d") in list(self.days.keys()):
+            self.todays_progess = self.days[today.strftime("%Y-%m-%d")].duration_total
         print(self.todays_progess)
 
 
