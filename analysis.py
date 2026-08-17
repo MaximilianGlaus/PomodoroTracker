@@ -21,15 +21,17 @@ class Day:
 
 
 class SessionsAnalysis:
-    def __init__(self, storage_path= Path("/tmp/pomodoro-dev")):
+    def __init__(self, storage_path= Path("/tmp/pomodoro-dev"), pomodoro_length_sec = 25 * 60, pomodoro_daily_target = 15):
         self.session_records = None
         self.storage_path = storage_path / "sessions.csv"
-        self.target_by_day = 22_500
+        self.pomodoro_length_sec = pomodoro_length_sec
+        self.target_by_day_sec = pomodoro_daily_target * self.pomodoro_length_sec
         self.today = None
         self.todays_progess = 0
         self.sessions_by_days = {}
         self.days = {}
         self.last_week = {}
+
 
     def _load_session_records_csv(self):
         if self.storage_path.exists():
@@ -94,11 +96,10 @@ class SessionsAnalysis:
             self.todays_progess = self.days[today.strftime("%Y-%m-%d")].duration_total
         print(self.todays_progess)
 
-
-
-   
-
-            
+    def _convert_sec_to_pomodoros(self, seconds):
+        """Returns number of pomodoros up to one decimal point"""
+        pomodoros = round(seconds / self.pomodoro_length_sec,1)
+        return pomodoros
 
 if __name__ == "__main__":
     sessions_analysis = SessionsAnalysis(Path("."))
@@ -108,6 +109,7 @@ if __name__ == "__main__":
     sessions_analysis._update_days_worked_last_week()
     sessions_analysis._update_today()
     sessions_analysis._update_todays_progess()
+    sessions_analysis._convert_sec_to_pomodoros(1700)
 
 
 
