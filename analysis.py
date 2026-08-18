@@ -1,7 +1,11 @@
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, date
 from pathlib import Path
-import csv
+from dotenv import load_dotenv
+import csv, json
+from openai import OpenAI
+import os
+from categories import CategoryStore
 
 @dataclass
 class SessionRecord:
@@ -15,28 +19,39 @@ class SessionRecord:
 class Day:
     date: datetime.date
     weekday: str
-    duration_total: int
+    duration_total_sec: int
     duration_per_category: {}
 
-
+class APIkeyError(Exception):
+    pass
 
 class SessionsAnalysis:
-    def __init__(self, storage_path= Path("/tmp/pomodoro-dev"), pomodoro_length_sec = 25 * 60, pomodoro_daily_target = 15):
+    def __init__(self, categories_dict = None, storage_path= Path("/tmp/pomodoro-dev"), pomodoro_length_sec = 25 * 60, pomodoro_daily_target = 15, ):
         self.session_records = None
-        self.storage_path = storage_path / "sessions.csv"
+        self.session_storage_path = storage_path / "sessions.csv"
         self.pomodoro_length_sec = pomodoro_length_sec
         self.target_by_day_sec = pomodoro_daily_target * self.pomodoro_length_sec
+        self.categories_dict = categories_dict
         self.today = None
-        self.todays_progess = 0
+        self.todays_duration = 0
+        self.todays_progess_in_percent = 0
         self.sessions_by_days = {}
         self.days = {}
         self.last_week = {}
+        self.developer_role = "Report today's progess based on the given data. It contains the target number of pomodoro sessions, the currently completed sessions and the relative percentage. Furthermore you are given today's sessions information and an overview of the past 7 days. Don't differentiate between work and work_overtime, count them together as one worksession."
+        self.prompt = ""
+        self._load_api_key()
+        self.llm_client = OpenAI()
+        self.llm_completion = ""
+        self.used_completion_tokens = 0
+        self.used_prompt_tokens = 0
+        
 
 
     def _load_session_records_csv(self):
-        if self.storage_path.exists():
+        if self.session_storage_path.exists():
             records = []
-            with open(self.storage_path, "r") as f:
+            with open(self.session_storage_path, "r") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     if row["category_id"] != "":
@@ -51,12 +66,15 @@ class SessionsAnalysis:
                         "category_id" : category_id})
             self.session_records = [SessionRecord(**session_record) for session_record in records]
 
+
+
+
     def _update_days(self):
         for day in self.sessions_by_days:
-            duration_total = 0
+            duration_total_sec = 0
             duration_per_category = {}
             for session in self.sessions_by_days[day]:
-                duration_total +=session.duration_sec
+                duration_total_sec +=session.duration_sec
                 if session.category_id in duration_per_category:
                     duration_per_category[session.category_id] +=session.duration_sec
                 else: 
@@ -65,7 +83,7 @@ class SessionsAnalysis:
             date= datetime.strptime(day, "%Y-%m-%d")
             weekdays =["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             weekday = weekdays[date.weekday()]
-            self.days[day] = Day(date=date, weekday=weekday, duration_total=duration_total, duration_per_category=duration_per_category)
+            self.days[day] = Day(date=date, weekday=weekday, duration_total_sec=duration_total_sec, duration_per_category=duration_per_category)
 
     def _session_records_group_by_days(self):
         for session_record in self.session_records:
@@ -88,28 +106,129 @@ class SessionsAnalysis:
         today = datetime.today()
         if today.strftime("%Y-%m-%d") in list(self.sessions_by_days.keys()):
             self.today = self.sessions_by_days[today.strftime("%Y-%m-%d")]
-        print(type(self.today))
 
-    def _update_todays_progess(self):
+    def _update_todays_duration(self):
         today = datetime.today()
         if today.strftime("%Y-%m-%d") in list(self.days.keys()):
-            self.todays_progess = self.days[today.strftime("%Y-%m-%d")].duration_total
-        print(self.todays_progess)
+            self.todays_duration = self.days[today.strftime("%Y-%m-%d")].duration_total_sec
+
+    def _update_todays_progress(self):
+        self.todays_progess_in_percent =  int(100*(self.todays_duration / self.target_by_day_sec))
+
+
 
     def _convert_sec_to_pomodoros(self, seconds):
         """Returns number of pomodoros up to one decimal point"""
         pomodoros = round(seconds / self.pomodoro_length_sec,1)
         return pomodoros
 
+    def _convert_pomodoros_to_sec(self, pomodoros):
+        """Returns number of pomodors up to one decimal point"""
+        seconds = round(pomodoros * self.pomodoro_length_sec,1)
+        return seconds
+
+    def _assemble_prompt(self):
+
+        # Adapt today to pomodoros, inject category names
+        day_dict = [asdict(c) for c in self.today]
+        deletion_list = []
+        count = 0
+        for session in day_dict:
+            duration_pomodoro = self._convert_sec_to_pomodoros(session["duration_sec"])
+            del session["duration_sec"]
+            if session["category_id"] is not None:
+                session["category_name"] = self.categories_dict[session["category_id"]]
+            else:
+                    session["category_name"] = "No Category"
+            session["duration_pomodoro"] = duration_pomodoro
+            if duration_pomodoro < 0.1:
+                deletion_list.append(count)
+            count += 1
+        deletion_list = reversed(deletion_list)   
+        for index in deletion_list:
+            del day_dict[index]       
+        day_dict = json.dumps(day_dict, default=str)
+
+
+        # Adapt last week to pomodoros
+        week_dict = {date_key : asdict(day_obj) for date_key, day_obj in self.last_week.items()}
+        for day_values in week_dict.values():
+            duration_total_pomodoros = self._convert_sec_to_pomodoros(day_values["duration_total_sec"]) 
+            day_values.pop("duration_total_sec")
+            day_values["duration_total_pomodoros"] = duration_total_pomodoros
+            day_categories_dict = {}
+            for key, value in day_values['duration_per_category'].items():
+                if key is not None:
+                    day_categories_dict[self.categories_dict[key]] = value
+                else:
+                    day_categories_dict["No Category"] = value
+            day_values.pop('duration_per_category')
+            day_values["duration_per_category"] = day_categories_dict
+
+            for category_name, category_values in day_values["duration_per_category"].items():
+                day_values["duration_per_category"][category_name] = self._convert_sec_to_pomodoros(category_values)
+        week_dict = json.dumps(week_dict, default=str)
+
+        # Context
+        time = "Current time/day: " + str(datetime.now())
+        units = "Pomodoro lenght: " + str(self.pomodoro_length_sec) + " seconds"
+        context = "\n".join(["Context: ", time, units])
+
+        # Progess
+        todays_progess = f"Today's Progress: {self.todays_progess_in_percent}%\nTarget Number of Pomodoros: {self._convert_sec_to_pomodoros(self.target_by_day_sec)}\nCompleted Sessions: {self._convert_sec_to_pomodoros(self.todays_duration)}"
+        todays_sessions = f"Today's Sessions:\n{day_dict}"
+        last_week = f"Last seven days:\n{week_dict}"
+        self.prompt =  "\n\n".join([context, todays_progess, todays_sessions, last_week])
+        # print(self.prompt)
+
+
+    def _create_llm_call(self):
+        start_time = datetime.now()
+        self.llm_completion = self.llm_client.chat.completions.create(
+            model = "gpt-5-nano",
+            reasoning_effort = "minimal",
+            messages= [
+                {"role": "developer", "content" : self.developer_role},
+                {"role": "user", "content" : self.prompt},
+            ]
+        )
+        end_time = datetime.now()
+
+        elapsed_time = end_time - start_time
+        print(f"Elapsed time: {elapsed_time}")
+        print(self.llm_completion.choices[0].message.content)
+        self.used_completion_tokens += self.llm_completion.usage.completion_tokens
+        self.used_prompt_tokens += self.llm_completion.usage.prompt_tokens
+        print(f"Completion Tokens: {self.used_completion_tokens}") 
+        print(f"Prompt Tokens: {self.used_prompt_tokens}")       
+
+    def _load_api_key(self):
+        load_dotenv()
+        if os.getenv("OPENAI_API_KEY") is None:
+            raise APIkeyError("API key value is None!")
+        elif os.getenv("OPENAI_API_KEY") ==  "":
+            raise APIkeyError("API key is empty!")
+        else:
+            api_key = os.getenv("OPENAI_API_KEY")
+
+
 if __name__ == "__main__":
-    sessions_analysis = SessionsAnalysis(Path("."))
+    categories = CategoryStore()
+    sessions_analysis = SessionsAnalysis(categories_dict=categories.create_categories_dict())
+
     sessions_analysis._load_session_records_csv()
+
     sessions_analysis._session_records_group_by_days()
     sessions_analysis._update_days()
     sessions_analysis._update_days_worked_last_week()
     sessions_analysis._update_today()
-    sessions_analysis._update_todays_progess()
-    sessions_analysis._convert_sec_to_pomodoros(1700)
+    sessions_analysis._update_todays_duration()
+    sessions_analysis._update_todays_progress()
+    sessions_analysis._assemble_prompt()
+
+    sessions_analysis._create_llm_call()
+
+
 
 
 
