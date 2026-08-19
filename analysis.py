@@ -6,6 +6,8 @@ import csv, json
 from openai import OpenAI
 import os
 from categories import CategoryStore
+from prompts import DEVELOPER_ROLE
+
 
 @dataclass
 class SessionRecord:
@@ -38,14 +40,30 @@ class SessionsAnalysis:
         self.sessions_by_days = {}
         self.days = {}
         self.last_week = {}
-        self.developer_role = "Report today's progess based on the given data. It contains the target number of pomodoro sessions, the currently completed sessions and the relative percentage. Furthermore you are given today's sessions information and an overview of the past 7 days. Don't differentiate between work and work_overtime, count them together as one worksession."
-        self.prompt = ""
+        self.developer_role = DEVELOPER_ROLE
+        self.prompt = None
         self._load_api_key()
         self.llm_client = OpenAI()
-        self.llm_completion = ""
+        self.llm_completion = None
+        self.llm_message = None
         self.used_completion_tokens = 0
         self.used_prompt_tokens = 0
+        self.update_sessions_analysis()
+
         
+    def update_sessions_analysis(self):
+        self._load_session_records_csv()
+        self._session_records_group_by_days()
+        self._update_days()
+        self._update_days_worked_last_week()
+        self._update_today()
+        self._update_todays_duration()
+        self._update_todays_progress()
+
+    def update_llm_message(self):
+        self._assemble_prompt()
+        self._create_llm_call()
+
 
 
     def _load_session_records_csv(self):
@@ -66,6 +84,16 @@ class SessionsAnalysis:
                         "category_id" : category_id})
             self.session_records = [SessionRecord(**session_record) for session_record in records]
 
+    def _session_records_group_by_days(self):
+        self.sessions_by_days = {}
+        for session_record in self.session_records:
+            date = datetime.date(session_record.start)
+            
+            if str(date) in self.sessions_by_days:
+                self.sessions_by_days[str(date)].append(session_record)
+            else: 
+                self.sessions_by_days[f"{date}"] = [session_record]
+
 
 
 
@@ -81,31 +109,31 @@ class SessionsAnalysis:
                     duration_per_category[session.category_id] = session.duration_sec
 
             date= datetime.strptime(day, "%Y-%m-%d")
-            weekdays =["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            weekday = weekdays[date.weekday()]
-            self.days[day] = Day(date=date, weekday=weekday, duration_total_sec=duration_total_sec, duration_per_category=duration_per_category)
 
-    def _session_records_group_by_days(self):
-        for session_record in self.session_records:
-            date = datetime.date(session_record.start)
-            if str(date) in self.sessions_by_days:
-                self.sessions_by_days[str(date)].append(session_record)
-            else: 
-                self.sessions_by_days[f"{date}"] = [session_record]
 
+            self.days[day] = Day(date=date, weekday=self._weekday(date), duration_total_sec=duration_total_sec, duration_per_category=duration_per_category)
+
+    def _weekday(self, date):
+        weekdays =["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        return weekdays[date.weekday()]
 
     def _update_days_worked_last_week(self):
         today = datetime.today()
-        for days_ago in range(1,8):
+        for days_ago in reversed(range(1,8)):
             days_ago=timedelta(days_ago)
             past_day=(today-days_ago)
             if past_day.strftime("%Y-%m-%d") in list(self.days.keys()):
                 self.last_week[f"{past_day.strftime('%Y-%m-%d')}"] = self.days[past_day.strftime("%Y-%m-%d")]
+            else:
+                self.last_week[f"{past_day.strftime('%Y-%m-%d')}"] = Day(date=past_day.strftime("%Y-%m-%d"), weekday=self._weekday(past_day), duration_total_sec=0, duration_per_category={})
+
 
     def _update_today(self):
         today = datetime.today()
         if today.strftime("%Y-%m-%d") in list(self.sessions_by_days.keys()):
             self.today = self.sessions_by_days[today.strftime("%Y-%m-%d")]
+        else:
+            self.today = []
 
     def _update_todays_duration(self):
         today = datetime.today()
@@ -114,7 +142,6 @@ class SessionsAnalysis:
 
     def _update_todays_progress(self):
         self.todays_progess_in_percent =  int(100*(self.todays_duration / self.target_by_day_sec))
-
 
 
     def _convert_sec_to_pomodoros(self, seconds):
@@ -170,7 +197,7 @@ class SessionsAnalysis:
         week_dict = json.dumps(week_dict, default=str)
 
         # Context
-        time = "Current time/day: " + str(datetime.now())
+        time = "Current time/day: " + str(datetime.now().replace(microsecond=0))
         units = "Pomodoro lenght: " + str(self.pomodoro_length_sec) + " seconds"
         context = "\n".join(["Context: ", time, units])
 
@@ -179,14 +206,14 @@ class SessionsAnalysis:
         todays_sessions = f"Today's Sessions:\n{day_dict}"
         last_week = f"Last seven days:\n{week_dict}"
         self.prompt =  "\n\n".join([context, todays_progess, todays_sessions, last_week])
-        # print(self.prompt)
+        print(self.prompt)
 
 
     def _create_llm_call(self):
         start_time = datetime.now()
         self.llm_completion = self.llm_client.chat.completions.create(
             model = "gpt-5-nano",
-            reasoning_effort = "minimal",
+            reasoning_effort = "low",
             messages= [
                 {"role": "developer", "content" : self.developer_role},
                 {"role": "user", "content" : self.prompt},
@@ -195,10 +222,11 @@ class SessionsAnalysis:
         end_time = datetime.now()
 
         elapsed_time = end_time - start_time
-        print(f"Elapsed time: {elapsed_time}")
-        print(self.llm_completion.choices[0].message.content)
+        self.llm_message = self.llm_completion.choices[0].message.content      
         self.used_completion_tokens += self.llm_completion.usage.completion_tokens
         self.used_prompt_tokens += self.llm_completion.usage.prompt_tokens
+        print(self.llm_message)
+        print(f"Elapsed time: {elapsed_time}")
         print(f"Completion Tokens: {self.used_completion_tokens}") 
         print(f"Prompt Tokens: {self.used_prompt_tokens}")       
 
@@ -215,18 +243,11 @@ class SessionsAnalysis:
 if __name__ == "__main__":
     categories = CategoryStore()
     sessions_analysis = SessionsAnalysis(categories_dict=categories.create_categories_dict())
+    sessions_analysis.update_sessions_analysis()
+    sessions_analysis.update_llm_message()
 
-    sessions_analysis._load_session_records_csv()
 
-    sessions_analysis._session_records_group_by_days()
-    sessions_analysis._update_days()
-    sessions_analysis._update_days_worked_last_week()
-    sessions_analysis._update_today()
-    sessions_analysis._update_todays_duration()
-    sessions_analysis._update_todays_progress()
-    sessions_analysis._assemble_prompt()
 
-    sessions_analysis._create_llm_call()
 
 
 

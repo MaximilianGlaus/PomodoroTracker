@@ -4,6 +4,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk, simpledialog
 from pathlib import Path
+from analysis import SessionsAnalysis
 
 class GuiPomodoroTracker:
     def __init__(self, storage_path = None):
@@ -14,13 +15,20 @@ class GuiPomodoroTracker:
         self.core = PomodoroTracker(self.storage_path)
         self.category_store = CategoryStore(self.storage_path)
         self.root = tk.Tk()
+        self.sessions_analysis = SessionsAnalysis(storage_path=self.storage_path, categories_dict=self.category_store.create_categories_dict())
         self.root.title(f"Pomodorotracker V{self.core.version_number}")
-        self.previous_state = self.core.state
+        self.previous_state = "Startup"
         self.main_font = ("Helvetica", 15)
         self.display_time = "--:--"
         self.display_text = "Inactive"
-
+        self.llm_text = self.sessions_analysis.llm_message
         self.active_categories = []
+
+
+        # Widget llm report
+
+        self.llm_label = tk.Label(self.root, text=self.llm_text, font=self.main_font, wraplength=400)
+        self.llm_label.pack(padx=5,pady=5) 
 
 
         #Widget State
@@ -66,6 +74,10 @@ class GuiPomodoroTracker:
         for column, [name, method] in enumerate(commands):
             button = tk.Button(buttonframe, text=name, command=self._make_handler(method), font=self.main_font)
             button.grid(row=0,column=column, sticky=tk.W+tk.E)
+
+
+
+
         
         buttonframe.pack(padx=5, pady=5)
         self._refresh_categories()
@@ -80,7 +92,17 @@ class GuiPomodoroTracker:
         self.category_store.create_new_category(name)
         self.category_store.save_categories()
         self._refresh_categories()
-        
+
+    def _check_for_llm_update(self):
+        if self.core.state != self.previous_state and self.core.state == "break" or self.previous_state == "Startup":
+            self.sessions_analysis.update_sessions_analysis()
+            self.sessions_analysis.update_llm_message()
+            self.llm_text = self.sessions_analysis.llm_message
+            self.llm_label.config(text=self.llm_text, font=self.main_font)
+
+    def _update_llm_text(self):
+        self.sessions_analysis.update_sessions_analysis()
+        self.sessions_analysis.update_llm_message()
 
     def _get_combobox_values(self):
         """Returns the category names, with '- none -' as the uncategorised option."""
@@ -153,6 +175,7 @@ class GuiPomodoroTracker:
    
 
     def _render(self):
+        self._check_for_llm_update()
         self._format_text()
         self.state_label.config(text=self.display_text, font=self.main_font)
         self._format_time()

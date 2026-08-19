@@ -1,11 +1,11 @@
-# PRD — CocoClock v0.2.0
+# PRD — CocoClock v0.3.0
 
 | Field | Value |
 |---|---|
 | Status | Draft |
 | Owner | Max |
 | Created | 2026-08-05 |
-| Milestone | Tracker v0.2.0 with live LLM progress indicator |
+| Milestone | Tracker v0.3.0 with live LLM progress indicator |
 | References | Administration `decisions.md` D-0002 · [REQUIREMENTS.md](REQUIREMENTS.md) US-5/US-6 |
 
 ## Change Log
@@ -17,6 +17,7 @@
 | 2026-08-05 | Structure slimmed: Non-Goals merged into "Out of Scope / Later"; Cut Line reduced to one line; the anomaly set is stated once (Success Criteria) and referenced from the MVP. |
 | 2026-08-11 | LLM requirement to report on +/- 25% effort was replaced with live progress tracking. |
 | 2026-08-11 | Pivot: feature is a live, always-visible progress indicator (today + 7-day retrospective) refreshed on app launch/break, not a weekly batch summary. Reasoning: a live signal during the day is more actionable than a retrospective report. Trade-off accepted: the two pattern checks (missing weekday, weekend work) are left to the LLM's own reading of the daily data rather than built as separate tested Python functions — saves build time within the KW33 3-day cap, at the cost of guaranteed-correct detection for those two. |
+| 2026-08-19 | Milestone renumbered v0.2.0 → v0.3.0. Reasoning: v0.2.0 was the category/label integration, already shipped (v0.2.0–v0.2.3 on `main`); this LLM feature is a separate, distinct milestone and gets its own version rather than being folded into the one that already shipped. |
 
 ---
 

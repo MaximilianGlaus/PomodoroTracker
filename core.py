@@ -29,7 +29,7 @@ class PomodoroTracker():
         self.storage_path = storage_path / "sessions.csv"
         self.csv_fieldnames = ("type","start","end","duration_sec","category_id")
 
-        self.version_number = "0.2.3" 
+        self.version_number = "0.3.0" 
         self.current_category_id = None
 
     def set_category_id(self, new_category_id):

@@ -234,3 +234,9 @@ holds). Two zones, deliberately split:
 - No tests yet for `analysis.py` (`test_analysis.py` does not exist) — the codebase's
   established pattern (fake data via `tmp_path`, DAMP-style AAA, see `test_core.py`) should
   extend here once the pipeline settles.
+- **States are plain strings** (`"inactive"`, `"work"`, `"break"`, ...) throughout `core.py`,
+  `gui.py`, and `test_core.py` — fragile to typos/case, no closed set, no IDE/type-checker
+  support. Flagged 19.08. Fix: a `StrEnum` (not plain `Enum` — members stay real strings, so
+  `csv.DictWriter` and existing string comparisons don't need a translation layer). Touches
+  all three files at once; explicitly foundation-polish, not this week's LLM-feature work —
+  first to cut per the KW34 risk rule. KW35 candidate, surface at the Friday Wochen-Review.
