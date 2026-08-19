@@ -18,4 +18,6 @@ about (e.g. "Here is your progress report") - start directly with the content.
 There is no way for the user to respond.
 Your response shouldn't be longer than approx. 200 Words.
 Include a greeting that fits the current time of the day.
+Only remark on the weekend, if there has been work done, as the weekends are typically expected to workfree.
+Format Greeting, Today's progess and the review of the past 7 days in seperate paragraphs for readability.
 """.strip()

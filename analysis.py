@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, date
 from pathlib import Path
 from dotenv import load_dotenv
 import csv, json
-from openai import OpenAI
+from openai import OpenAI, AuthenticationError, RateLimitError, APIConnectionError
 import os
 from categories import CategoryStore
 from prompts import DEVELOPER_ROLE
@@ -42,10 +42,10 @@ class SessionsAnalysis:
         self.last_week = {}
         self.developer_role = DEVELOPER_ROLE
         self.prompt = None
-        self._load_api_key()
-        self.llm_client = OpenAI()
-        self.llm_completion = None
         self.llm_message = None
+        self._setup_llm()
+        self.llm_completion = None
+
         self.used_completion_tokens = 0
         self.used_prompt_tokens = 0
         self.update_sessions_analysis()
@@ -62,7 +62,7 @@ class SessionsAnalysis:
 
     def update_llm_message(self):
         self._assemble_prompt()
-        self._create_llm_call()
+        self._launch_llm_call()
 
 
 
@@ -208,36 +208,55 @@ class SessionsAnalysis:
         self.prompt =  "\n\n".join([context, todays_progess, todays_sessions, last_week])
         print(self.prompt)
 
+    def _launch_llm_call(self):
+        try:
+            self._create_llm_call()
+        except AuthenticationError:
+            self.llm_message = "AuthenticationError"
+        except RateLimitError:
+            self.llm_message = "RateLimitError"
+        except APIConnectionError:
+            self.llm_message = "APIConnectionError"
 
     def _create_llm_call(self):
         start_time = datetime.now()
-        self.llm_completion = self.llm_client.chat.completions.create(
-            model = "gpt-5-nano",
-            reasoning_effort = "low",
-            messages= [
-                {"role": "developer", "content" : self.developer_role},
-                {"role": "user", "content" : self.prompt},
-            ]
-        )
-        end_time = datetime.now()
+        if self.llm_client is not None:
+            self.llm_completion = self.llm_client.chat.completions.create(
+                model = "gpt-5-nano",
+                reasoning_effort = "low",
+                messages= [
+                    {"role": "developer", "content" : self.developer_role},
+                    {"role": "user", "content" : self.prompt},
+                ]
+            )
+            end_time = datetime.now()
 
-        elapsed_time = end_time - start_time
-        self.llm_message = self.llm_completion.choices[0].message.content      
-        self.used_completion_tokens += self.llm_completion.usage.completion_tokens
-        self.used_prompt_tokens += self.llm_completion.usage.prompt_tokens
-        print(self.llm_message)
-        print(f"Elapsed time: {elapsed_time}")
-        print(f"Completion Tokens: {self.used_completion_tokens}") 
-        print(f"Prompt Tokens: {self.used_prompt_tokens}")       
+            elapsed_time = end_time - start_time
+            self.llm_message = self.llm_completion.choices[0].message.content      
+            self.used_completion_tokens += self.llm_completion.usage.completion_tokens
+            self.used_prompt_tokens += self.llm_completion.usage.prompt_tokens
+            print(self.llm_message)
+            print(f"Elapsed time: {elapsed_time}")
+            print(f"Completion Tokens: {self.used_completion_tokens}") 
+            print(f"Prompt Tokens: {self.used_prompt_tokens}")   
+            print(self.llm_completion)    
 
     def _load_api_key(self):
         load_dotenv()
         if os.getenv("OPENAI_API_KEY") is None:
-            raise APIkeyError("API key value is None!")
+            self.llm_message = "API key value is None!"
         elif os.getenv("OPENAI_API_KEY") ==  "":
-            raise APIkeyError("API key is empty!")
+            self.llm_message = "API key is empty!"
         else:
             api_key = os.getenv("OPENAI_API_KEY")
+            return True
+
+    def _setup_llm(self):
+        if self._load_api_key():
+            self.llm_client = OpenAI()
+        else:
+            self.llm_client = None
+        
 
 
 if __name__ == "__main__":
