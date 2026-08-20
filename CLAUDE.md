@@ -240,15 +240,23 @@ holds). Two zones, deliberately split:
   `csv.DictWriter` and existing string comparisons don't need a translation layer). Touches
   all three files at once; explicitly foundation-polish, not this week's LLM-feature work —
   first to cut per the KW34 risk rule. KW35 candidate, surface at the Friday Wochen-Review.
-- **The LLM call in `GuiPomodoroTracker.__init__` blocks the main thread** — confirmed 19.08:
-  the packaged `.app` looked like it wasn't launching at all, because Tkinter never paints a
-  window until `mainloop()` runs, and the synchronous OpenAI call happens before that. Fix is
-  threading (background thread does the call, `_heartbeat`'s existing 500ms poll picks up the
-  result — no new polling mechanism needed, just don't touch widgets off the main thread).
-  Deliberately not patching around it with `root.after(0, ...)` to just paint the window
-  first; doing the real fix instead. Planned for its own branch, targeted for 19./20.08.
 - **Rename to "CocoClock"** (market name; `PomodoroTracker` was the working title, per the
   owner 19.08) — touches the repo name, the PyInstaller `--name` flag, the GUI title string,
   `.icns`/bundle identity, README, and this file's own vocabulary throughout. Needs to be
   scoped as its own task before touching anything, not done piecemeal. Targeted for
   19./20.08.
+- **API key storage: plaintext local file, not real encryption, for now.** macOS Keychain
+  integration (`keyring`) was tried 19./20.08 and hits a genuine OSStatus failure
+  (`-25244, "Unknown Error"`) on `set_password` from the unsigned PyInstaller `.app` —
+  every rebuild gets a new ad-hoc signing identity, so Keychain treats it as an
+  unrecognized requester each time. Real fix needs a paid Apple Developer ID
+  ($99/yr) + signing/notarization, which is out of scope for KW34 and doesn't move
+  any Wochenziel. Decided 20.08: fall back to a plain local file (same `storage_path`
+  directory as `sessions.csv`/`category_storage.json`, restrictive permissions).
+  DIY encryption without a user-supplied master password was considered and rejected
+  — the decryption key would have to live in another local file or in source, which
+  doesn't add real protection over plaintext on a single-user machine. A master
+  password + `cryptography`'s `Fernet` is the real upgrade path if this ever needs
+  to be more than "readable by anyone with access to this machine" — parked, not
+  built, revisit once proper code signing is worth the cost (i.e. once CocoClock is
+  actually heading toward being shared with other people, not before).

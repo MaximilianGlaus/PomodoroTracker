@@ -231,6 +231,7 @@ class SessionsAnalysis:
     def _create_llm_call(self):
         start_time = datetime.now()
         if self.llm_client is not None:
+            self.llm_message = "Message loading..."
             self.llm_completion = self.llm_client.chat.completions.create(
                 model = "gpt-5-nano",
                 reasoning_effort = "low",
@@ -249,7 +250,9 @@ class SessionsAnalysis:
             print(f"Elapsed time: {elapsed_time}")
             print(f"Completion Tokens: {self.used_completion_tokens}") 
             print(f"Prompt Tokens: {self.used_prompt_tokens}")   
-            print(self.llm_completion)    
+            print(self.llm_completion)
+        else:
+            self.llm_message = "No API key configured."  
 
     def _load_api_key(self):
         load_dotenv()
@@ -264,7 +267,7 @@ class SessionsAnalysis:
             else:
                 return True
         else:
-            api_key = os.getenv("OPENAI_API_KEY")
+            self.api_key = os.getenv("OPENAI_API_KEY")
             return True
 
 

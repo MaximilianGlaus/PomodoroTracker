@@ -27,10 +27,10 @@ class PomodoroTracker():
 
         self.dataline = None
 
-        self.storage_path = storage_path / "sessions.csv"
+        self.session_storage_path = storage_path / "sessions.csv"
         self.csv_fieldnames = ("type","start","end","duration_sec","category_id")
 
-        self.version_number = "0.3.1" 
+        self.version_number = "0.3.2" 
         self.current_category_id = None
 
     def set_category_id(self, new_category_id):
@@ -102,15 +102,15 @@ class PomodoroTracker():
         
     def _check_storage(self):
         """Guarantees the existance of a storage file"""
-        if self.storage_path.exists() == False:
-            with open(self.storage_path,"w", newline="") as f:
+        if self.session_storage_path.exists() == False:
+            with open(self.session_storage_path,"w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=self.csv_fieldnames)
                 writer.writeheader()
 
 
     def _save_csv(self):
         """Appends data line to the storage csv"""
-        with open(self.storage_path, "a", newline ="") as session_storage:
+        with open(self.session_storage_path, "a", newline ="") as session_storage:
             writer = csv.DictWriter(session_storage, fieldnames=self.csv_fieldnames)
             writer.writerow(self.dataline)
 

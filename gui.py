@@ -6,7 +6,7 @@ from tkinter import ttk, simpledialog
 from pathlib import Path
 from analysis import SessionsAnalysis
 import threading
-import keyring
+import json
 
 KEYRING_SERVICE = "CocoClock"
 KEYRING_USERNAME = "openai_api_key"
@@ -17,6 +17,7 @@ class GuiPomodoroTracker:
             self._compute_storage_path()
         else:
             self.storage_path = storage_path
+        self.api_storage_path = self.storage_path / "api_key.json"
         self.core = PomodoroTracker(self.storage_path)
         self.category_store = CategoryStore(self.storage_path)
         self.root = tk.Tk()
@@ -90,18 +91,27 @@ class GuiPomodoroTracker:
         self._heartbeat()
 
     def _set_api_key(self):
-        key = simpledialog.askstring("Set OpenAI API key", "OpenAI API key:")
-        if key is None:
+        key_input = simpledialog.askstring("Set OpenAI API key", "OpenAI API key:")
+        if key_input is None:
             return
-        if not key.strip():
+        if not key_input.strip():
             return
-        keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, key)
-        self.sessions_analysis.api_key = key
+        try:
+            self.sessions_analysis.api_key = key_input
+            key = {}
+            key["OPENAI_API_KEY"] = key_input
+            self.api_storage_path.write_text(json.dumps(key))
+        except Exception as err:
+            self.llm_text = str(err)
+
+
         self.sessions_analysis.setup_llm()
         self._request_llm_update()
 
     def _get_api_key(self):
-        return keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME)
+        if self.api_storage_path.exists():
+            data = json.loads(self.api_storage_path.read_text())
+            return data["OPENAI_API_KEY"]
 
 
     def _on_new_category(self):
@@ -125,7 +135,6 @@ class GuiPomodoroTracker:
 
 
     def _update_llm_text(self):
-        self.sessions_analysis.llm_message = "Message loading..."
         self.sessions_analysis.update_sessions_analysis()
         self.sessions_analysis.update_llm_message()
         self.llm_thread_running = False
@@ -157,7 +166,7 @@ class GuiPomodoroTracker:
                     return id
 
     def _refresh_categories(self):
-        """Updates all occurences of categories in the gui."""
+        """Updates acll occurences of categories in the gui."""
         self._update_active_categories()
         self.categories_combobox["values"] = self._get_combobox_values()
 

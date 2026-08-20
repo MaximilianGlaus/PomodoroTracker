@@ -11,16 +11,16 @@ class CategoryStore:
         """Initializes the categroy store."""
         self.ids_saved = 0
         self.categories = {}
-        self.storage_path = storage_path / "category_storage.json"
+        self.category_storage_path = storage_path / "category_storage.json"
         self.load_categories()
 
     def save_categories(self):
         data = [asdict(c) for c in self.categories.values()]
-        self.storage_path.write_text(json.dumps(data))
+        self.category_storage_path.write_text(json.dumps(data))
 
     def load_categories(self):
-        if self.storage_path.exists():
-            data = json.loads(self.storage_path.read_text())
+        if self.category_storage_path.exists():
+            data = json.loads(self.category_storage_path.read_text())
             self.categories = {d["id"]:Category(**d) for d in data}
             self.ids_saved = (max(self.categories.keys())+1)
 
