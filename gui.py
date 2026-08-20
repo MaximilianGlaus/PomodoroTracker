@@ -5,6 +5,11 @@ import tkinter as tk
 from tkinter import ttk, simpledialog
 from pathlib import Path
 from analysis import SessionsAnalysis
+import threading
+import keyring
+
+KEYRING_SERVICE = "CocoClock"
+KEYRING_USERNAME = "openai_api_key"
 
 class GuiPomodoroTracker:
     def __init__(self, storage_path = None):
@@ -15,14 +20,20 @@ class GuiPomodoroTracker:
         self.core = PomodoroTracker(self.storage_path)
         self.category_store = CategoryStore(self.storage_path)
         self.root = tk.Tk()
-        self.sessions_analysis = SessionsAnalysis(storage_path=self.storage_path, categories_dict=self.category_store.create_categories_dict())
+        self.sessions_analysis = SessionsAnalysis(storage_path=self.storage_path, categories_dict=self.category_store.create_categories_dict(), api_key=self._get_api_key())
+        self.llm_thread_running = False
         self.root.title(f"Pomodorotracker V{self.core.version_number}")
         self.previous_state = "Startup"
         self.main_font = ("Helvetica", 15)
+        self.sub_font = ("Helvetica", 12)
         self.display_time = "--:--"
         self.display_text = "Inactive"
         self.llm_text = self.sessions_analysis.llm_message
         self.active_categories = []
+
+        #Widget Set API Key
+        self.set_api_key_button = tk.Button(self.root, text="Set OpenAI API key", command=self._set_api_key, font=self.sub_font)
+        self.set_api_key_button.pack(pady=2)
 
 
         # Widget llm report
@@ -55,8 +66,6 @@ class GuiPomodoroTracker:
         #Widget New Category
         self.new_categories_button = tk.Button(category_frame, text="Add new category", command = self._on_new_category, font=self.main_font)
         self.new_categories_button.pack(side=tk.LEFT, padx=5)
-    
-
         category_frame.pack(padx=5,pady=5)
 
 
@@ -75,13 +84,25 @@ class GuiPomodoroTracker:
             button = tk.Button(buttonframe, text=name, command=self._make_handler(method), font=self.main_font)
             button.grid(row=0,column=column, sticky=tk.W+tk.E)
 
-
-
-
         
         buttonframe.pack(padx=5, pady=5)
         self._refresh_categories()
         self._heartbeat()
+
+    def _set_api_key(self):
+        key = simpledialog.askstring("Set OpenAI API key", "OpenAI API key:")
+        if key is None:
+            return
+        if not key.strip():
+            return
+        keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, key)
+        self.sessions_analysis.api_key = key
+        self.sessions_analysis.setup_llm()
+        self._request_llm_update()
+
+    def _get_api_key(self):
+        return keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME)
+
 
     def _on_new_category(self):
         name = simpledialog.askstring("New category", "Name:")
@@ -95,14 +116,25 @@ class GuiPomodoroTracker:
 
     def _check_for_llm_update(self):
         if self.core.state != self.previous_state and self.core.state == "break" or self.previous_state == "Startup":
-            self.sessions_analysis.update_sessions_analysis()
-            self.sessions_analysis.update_llm_message()
+            self._request_llm_update()
+
+    def _request_llm_update(self):
+            if not self.llm_thread_running:
+                self.llm_thread_running = True
+                threading.Thread(target=self._update_llm_text).start()
+
+
+    def _update_llm_text(self):
+        self.sessions_analysis.llm_message = "Message loading..."
+        self.sessions_analysis.update_sessions_analysis()
+        self.sessions_analysis.update_llm_message()
+        self.llm_thread_running = False
+
+    def _poll_llm_message(self):
+        if self.llm_text != self.sessions_analysis.llm_message:
             self.llm_text = self.sessions_analysis.llm_message
             self.llm_label.config(text=self.llm_text, font=self.main_font)
 
-    def _update_llm_text(self):
-        self.sessions_analysis.update_sessions_analysis()
-        self.sessions_analysis.update_llm_message()
 
     def _get_combobox_values(self):
         """Returns the category names, with '- none -' as the uncategorised option."""
@@ -176,6 +208,7 @@ class GuiPomodoroTracker:
 
     def _render(self):
         self._check_for_llm_update()
+        self._poll_llm_message()
         self._format_text()
         self.state_label.config(text=self.display_text, font=self.main_font)
         self._format_time()

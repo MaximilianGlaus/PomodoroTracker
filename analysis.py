@@ -28,7 +28,7 @@ class APIkeyError(Exception):
     pass
 
 class SessionsAnalysis:
-    def __init__(self, categories_dict = None, storage_path= Path("/tmp/pomodoro-dev"), pomodoro_length_sec = 25 * 60, pomodoro_daily_target = 15, ):
+    def __init__(self, categories_dict = None, storage_path= Path("/tmp/pomodoro-dev"), api_key = None, pomodoro_length_sec = 25 * 60, pomodoro_daily_target = 15, ):
         self.session_records = None
         self.session_storage_path = storage_path / "sessions.csv"
         self.pomodoro_length_sec = pomodoro_length_sec
@@ -43,7 +43,8 @@ class SessionsAnalysis:
         self.developer_role = DEVELOPER_ROLE
         self.prompt = None
         self.llm_message = None
-        self._setup_llm()
+        self.api_key = api_key
+        self.setup_llm()
         self.llm_completion = None
 
         self.used_completion_tokens = 0
@@ -63,6 +64,16 @@ class SessionsAnalysis:
     def update_llm_message(self):
         self._assemble_prompt()
         self._launch_llm_call()
+
+    def setup_llm(self):
+        if self._load_api_key():
+            if self.api_key is not None:
+                self.llm_client = OpenAI(api_key=self.api_key)
+            else:
+                self.llm_client = OpenAI()
+        else:
+            self.llm_client = None
+
 
 
 
@@ -155,7 +166,6 @@ class SessionsAnalysis:
         return seconds
 
     def _assemble_prompt(self):
-
         # Adapt today to pomodoros, inject category names
         day_dict = [asdict(c) for c in self.today]
         deletion_list = []
@@ -244,19 +254,20 @@ class SessionsAnalysis:
     def _load_api_key(self):
         load_dotenv()
         if os.getenv("OPENAI_API_KEY") is None:
-            self.llm_message = "API key value is None!"
+            if self.api_key is None:
+                self.llm_message = "API key value is None!"
+            else:
+                return True
         elif os.getenv("OPENAI_API_KEY") ==  "":
-            self.llm_message = "API key is empty!"
+            if self.api_key is None:
+                self.llm_message = "API key is empty!"
+            else:
+                return True
         else:
             api_key = os.getenv("OPENAI_API_KEY")
             return True
 
-    def _setup_llm(self):
-        if self._load_api_key():
-            self.llm_client = OpenAI()
-        else:
-            self.llm_client = None
-        
+
 
 
 if __name__ == "__main__":
@@ -264,7 +275,7 @@ if __name__ == "__main__":
     sessions_analysis = SessionsAnalysis(categories_dict=categories.create_categories_dict())
     sessions_analysis.update_sessions_analysis()
     sessions_analysis.update_llm_message()
-
+    print(sessions_analysis.llm_message)
 
 
 

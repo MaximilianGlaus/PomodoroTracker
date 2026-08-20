@@ -2,6 +2,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 import csv
+import keyring
 
 
 class PomodoroTracker():
@@ -29,7 +30,7 @@ class PomodoroTracker():
         self.storage_path = storage_path / "sessions.csv"
         self.csv_fieldnames = ("type","start","end","duration_sec","category_id")
 
-        self.version_number = "0.3.0" 
+        self.version_number = "0.3.1" 
         self.current_category_id = None
 
     def set_category_id(self, new_category_id):
