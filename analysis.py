@@ -29,7 +29,7 @@ class APIkeyError(Exception):
 
 class SessionsAnalysis:
     def __init__(self, categories_dict = None, storage_path= Path("/tmp/pomodoro-dev"), api_key = None, pomodoro_length_sec = 25 * 60, pomodoro_daily_target = 15, ):
-        self.session_records = None
+        self.session_records = []
         self.session_storage_path = storage_path / "sessions.csv"
         self.pomodoro_length_sec = pomodoro_length_sec
         self.target_by_day_sec = pomodoro_daily_target * self.pomodoro_length_sec
@@ -49,6 +49,7 @@ class SessionsAnalysis:
 
         self.used_completion_tokens = 0
         self.used_prompt_tokens = 0
+        self._load_token_count()
         self.update_sessions_analysis()
 
         
