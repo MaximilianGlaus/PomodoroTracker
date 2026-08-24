@@ -26,15 +26,21 @@ class GuiPomodoroTracker:
         self.root.title(f"Pomodorotracker V{self.core.version_number}")
         self.previous_state = "Startup"
         self.main_font = ("Helvetica", 15)
+        self.bold_font = ("Helvetica", 50, "bold")
         self.sub_font = ("Helvetica", 12)
         self.display_time = "--:--"
         self.display_text = "Inactive"
         self.llm_text = self.sessions_analysis.llm_message
+        self._update_token_count_text()
         self.active_categories = []
 
-        #Widget Set API Key
-        self.set_api_key_button = tk.Button(self.root, text="Set OpenAI API key", command=self._set_api_key, font=self.sub_font)
-        self.set_api_key_button.pack(pady=2)
+        #Widget Set API Key and Token Count
+        llm_frame = tk.Frame(self.root)
+        self.set_api_key_button = tk.Button(llm_frame, text="Set OpenAI API key", command=self._set_api_key, font=self.sub_font)
+        self.set_api_key_button.grid(row=0,column=0, sticky=tk.W+tk.E)
+        self.token_count_label = tk.Label(llm_frame, text=self.token_count_text, font=self.sub_font)
+        self.token_count_label.grid(row=0,column=1, sticky=tk.W+tk.E)
+        llm_frame.pack(padx=5, pady=5)
 
 
         # Widget llm report
@@ -48,7 +54,7 @@ class GuiPomodoroTracker:
         self.state_label.pack(padx=5,pady=5)
 
         #Widget Time
-        self.time_label = tk.Label(self.root, text=self.core.remaining_seconds, font=self.main_font)
+        self.time_label = tk.Label(self.root, text=self.core.remaining_seconds, font=self.bold_font)
         self.time_label.pack(padx=5,pady=5)
 
         #Widget Category
@@ -131,19 +137,28 @@ class GuiPomodoroTracker:
     def _request_llm_update(self):
             if not self.llm_thread_running:
                 self.llm_thread_running = True
-                threading.Thread(target=self._update_llm_text).start()
+                threading.Thread(target=self._initiate_llm_update).start()
 
 
-    def _update_llm_text(self):
+
+    def _initiate_llm_update(self):
         self.sessions_analysis.update_sessions_analysis()
         self.sessions_analysis.update_llm_message()
         self.llm_thread_running = False
 
+    def _update_token_count_text(self):
+        self.token_count_text= f"Total completion tokens: {self.sessions_analysis.used_completion_tokens}\nTotal prompt tokens: {self.sessions_analysis.used_prompt_tokens}"
+
+
     def _poll_llm_message(self):
         if self.llm_text != self.sessions_analysis.llm_message:
-            self.llm_text = self.sessions_analysis.llm_message
-            self.llm_label.config(text=self.llm_text, font=self.main_font)
+            self._update_llm_display()
 
+    def _update_llm_display(self):
+        self.llm_text = self.sessions_analysis.llm_message
+        self.llm_label.config(text=self.llm_text)
+        self._update_token_count_text()
+        self.token_count_label.config(text=self.token_count_text)
 
     def _get_combobox_values(self):
         """Returns the category names, with '- none -' as the uncategorised option."""
@@ -195,7 +210,7 @@ class GuiPomodoroTracker:
         if self.core.state == "inactive":
             self.display_text = "No work session active"
         elif self.core.state == "work":
-            self.display_text = f"{(self.core.pomodoro_length_sec/60):.2f} min work session"
+            self.display_text = f"{(self.core.pomodoro_length_sec/60):.2f}min work session"
         elif self.core.state == "break":
             self.display_text = f"{(self.core.break_length_sec/60):.2f}min break session"
         elif self.core.state == "break_overtime":
@@ -219,9 +234,9 @@ class GuiPomodoroTracker:
         self._check_for_llm_update()
         self._poll_llm_message()
         self._format_text()
-        self.state_label.config(text=self.display_text, font=self.main_font)
+        self.state_label.config(text=self.display_text)
         self._format_time()
-        self.time_label.config(text=self.display_time, font=self.main_font)
+        self.time_label.config(text=self.display_time)
 
         if self.core.state != self.previous_state:
             self.root.bell()

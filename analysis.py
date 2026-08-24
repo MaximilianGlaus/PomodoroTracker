@@ -30,7 +30,9 @@ class APIkeyError(Exception):
 class SessionsAnalysis:
     def __init__(self, categories_dict = None, storage_path= Path("/tmp/pomodoro-dev"), api_key = None, pomodoro_length_sec = 25 * 60, pomodoro_daily_target = 15, ):
         self.session_records = []
+        self.storage_directory = storage_path
         self.session_storage_path = storage_path / "sessions.csv"
+        self.token_count_path = storage_path / "token_count.json"
         self.pomodoro_length_sec = pomodoro_length_sec
         self.target_by_day_sec = pomodoro_daily_target * self.pomodoro_length_sec
         self.categories_dict = categories_dict
@@ -65,6 +67,7 @@ class SessionsAnalysis:
     def update_llm_message(self):
         self._assemble_prompt()
         self._launch_llm_call()
+        self._save_token_count()
 
     def setup_llm(self):
         if self._load_api_key():
@@ -74,9 +77,6 @@ class SessionsAnalysis:
                 self.llm_client = OpenAI()
         else:
             self.llm_client = None
-
-
-
 
     def _load_session_records_csv(self):
         if self.session_storage_path.exists():
@@ -247,13 +247,28 @@ class SessionsAnalysis:
             self.llm_message = self.llm_completion.choices[0].message.content      
             self.used_completion_tokens += self.llm_completion.usage.completion_tokens
             self.used_prompt_tokens += self.llm_completion.usage.prompt_tokens
-            print(self.llm_message)
-            print(f"Elapsed time: {elapsed_time}")
-            print(f"Completion Tokens: {self.used_completion_tokens}") 
-            print(f"Prompt Tokens: {self.used_prompt_tokens}")   
-            print(self.llm_completion)
+            # print(self.llm_completion)
+            # print(f"Elapsed time: {elapsed_time}")
+            # print(f"Completion Tokens: {self.used_completion_tokens}") 
+            # print(f"Prompt Tokens: {self.used_prompt_tokens}")   
+            # print(self.llm_completion)
         else:
             self.llm_message = "No API key configured."  
+
+    def _save_token_count(self):
+        """Saves the accumulated token count."""
+        self.storage_directory.mkdir(parents=True, exist_ok=True)
+        data = {"used_completion_tokens": self.used_completion_tokens, "used_prompt_tokens" : self.used_prompt_tokens}
+        self.token_count_path.write_text(json.dumps(data))
+
+    def _load_token_count(self):
+        """Loads the current token count."""
+        if self.token_count_path.exists():
+            data = json.loads(self.token_count_path.read_text())
+            self.used_completion_tokens = data["used_completion_tokens"]
+            self.used_prompt_tokens = data ["used_prompt_tokens"]
+        
+
 
     def _load_api_key(self):
         load_dotenv()
@@ -279,7 +294,7 @@ if __name__ == "__main__":
     sessions_analysis = SessionsAnalysis(categories_dict=categories.create_categories_dict())
     sessions_analysis.update_sessions_analysis()
     sessions_analysis.update_llm_message()
-    print(sessions_analysis.llm_message)
+    print(sessions_analysis.llm_completion)
 
 
 
