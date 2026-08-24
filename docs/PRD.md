@@ -18,6 +18,8 @@
 | 2026-08-11 | LLM requirement to report on +/- 25% effort was replaced with live progress tracking. |
 | 2026-08-11 | Pivot: feature is a live, always-visible progress indicator (today + 7-day retrospective) refreshed on app launch/break, not a weekly batch summary. Reasoning: a live signal during the day is more actionable than a retrospective report. Trade-off accepted: the two pattern checks (missing weekday, weekend work) are left to the LLM's own reading of the daily data rather than built as separate tested Python functions — saves build time within the KW33 3-day cap, at the cost of guaranteed-correct detection for those two. |
 | 2026-08-19 | Milestone renumbered v0.2.0 → v0.3.0. Reasoning: v0.2.0 was the category/label integration, already shipped (v0.2.0–v0.2.3 on `main`); this LLM feature is a separate, distinct milestone and gets its own version rather than being folded into the one that already shipped. |
+| 2026-08-24 | Deduping scratched in order to make time for UX and Portfolio polish. |
+
 
 ---
 
@@ -40,7 +42,7 @@ The self-taught learner might measure his time investment, however measured data
 > The thinnest end-to-end value that points toward the vision and is buildable *now*.
 > Core decision (05.08.): **Mirror**, not accountability.
 
-An LLM instance reports the work done and names gaps and achievements — for the progress of the current day and retrospectively for the last 7 days. The model gets called at startup and at break, unless there has already been a call with the same stats (launch > api-call > shutdown (no Pomodoro completed) > relaunch > no api-call).
+An LLM instance reports the work done and names gaps and achievements — for the progress of the current day and retrospectively for the last 7 days. The model gets called at startup and at break.
 (The specific, testable anomalies it must name are listed once, under Success Criteria.)
 
 ## Success Criteria (measurable)
