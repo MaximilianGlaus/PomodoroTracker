@@ -1,4 +1,4 @@
-import analysis, pytest, csv, unittest
+import analysis, pytest, csv, unittest, httpx2, openai
 from unittest.mock import patch, MagicMock
 
 
@@ -37,8 +37,57 @@ def mock_llm_client():
     client.chat.completions.create.return_value = completion
     return client
 
+@pytest.fixture
+def mock_llm_client_auth_error():
+    """Mock of the OpenAI client."""
+    client = MagicMock()
+    completion = MagicMock()
+    completion.choices = [MagicMock()]
+    completion.choices[0].message.content = "LLM Response"
+    completion.usage.completion_tokens = 500
+    completion.usage.prompt_tokens = 450
+
+    fake_request =  httpx2.Request("POST", "https://api.openai.com/v1/chat/completions")
+    fake_response = httpx2.Response(401, request=fake_request)
+    fake_error = openai.AuthenticationError("bad key", response=fake_response, body=None)
+
+    client.chat.completions.create.side_effect = fake_error
+    return client
+
+@pytest.fixture
+def mock_llm_client_rate_limit_error():
+    """Mock of the OpenAI client."""
+    client = MagicMock()
+    completion = MagicMock()
+    completion.choices = [MagicMock()]
+    completion.choices[0].message.content = "LLM Response"
+    completion.usage.completion_tokens = 500
+    completion.usage.prompt_tokens = 450
+
+    fake_request =  httpx2.Request("POST", "https://api.openai.com/v1/chat/completions")
+    fake_response = httpx2.Response(429, request=fake_request)
+    fake_error = openai.RateLimitError("Too Many Requests", response=fake_response,  body=None)
+
+    client.chat.completions.create.side_effect = fake_error
+    return client
 
 
+@pytest.fixture
+def mock_llm_client_connection_error():
+    """Mock of the OpenAI client."""
+    client = MagicMock()
+    completion = MagicMock()
+    completion.choices = [MagicMock()]
+    completion.choices[0].message.content = "LLM Response"
+    completion.usage.completion_tokens = 500
+    completion.usage.prompt_tokens = 450
+
+    fake_request =  httpx2.Request("POST", "https://api.openai.com/v1/chat/completions")
+    fake_response = httpx2.Response(401, request=fake_request)
+    fake_error = openai.APIConnectionError(request=fake_request)
+
+    client.chat.completions.create.side_effect = fake_error
+    return client
 
 
 def test_sessions_by_days_idempotent(sessions_analysis):
@@ -120,38 +169,6 @@ def test_update_days_duration_aggregation(sessions_analysis):
     assert duration_cat_1_1 + 1500 == duration_cat_1_2
 
 
-def test_llm_completion(sessions_analysis, mock_llm_client):
-    """Test"""
-    rows=[
-            {
-                    "type": "work", 
-                    "start": "2026-08-10 09:00:00", 
-                    "end": "2026-08-10 09:25:00",
-                    "duration_sec": "1500", 
-                    "category_id": "1"
-                    }, 
-            {
-                    "type": "work", 
-                    "start": "2026-08-10 09:30:00", 
-                    "end": "2026-08-10 09:55:00",
-                    "duration_sec": "1500", 
-                    "category_id": "2"
-                    },
-                    ]
-    sessions_analysis.session_storage_path = write_sessions_csv(sessions_analysis.session_storage_path, rows)
-    sessions_analysis.update_sessions_analysis()
-    sessions_analysis.llm_client = mock_llm_client
-    sessions_analysis.llm_completion = sessions_analysis.llm_client.chat.completions.create(
-                    model = "gpt-5-nano",
-                    reasoning_effort = "low",
-                    messages= [
-                        {"role": "developer", "content" : "self.developer_role"},
-                        {"role": "user", "content" : "self.prompt"},
-                    ]
-                )
-    assert sessions_analysis.llm_completion.choices[0].message.content == "LLM Response"
-
-
 def test_write_laod_token_count(sessions_analysis):
 
     sessions_analysis.used_completion_tokens = 31136
@@ -163,6 +180,26 @@ def test_write_laod_token_count(sessions_analysis):
     assert sessions_analysis.used_completion_tokens == 31136
     assert sessions_analysis.used_prompt_tokens == 26508
 
+def test_happy_path(sessions_analysis, mock_llm_client):
+    sessions_analysis.llm_client = mock_llm_client
+    sessions_analysis._launch_llm_call()
+    assert sessions_analysis.llm_message == "LLM Response"
+
+
+def test_401_bad_key(sessions_analysis, mock_llm_client_auth_error):
+    sessions_analysis.llm_client = mock_llm_client_auth_error
+    sessions_analysis._launch_llm_call()
+    assert sessions_analysis.llm_message == "AuthenticationError"
+
+def test_429_rate_limit(sessions_analysis, mock_llm_client_rate_limit_error):
+    sessions_analysis.llm_client = mock_llm_client_rate_limit_error
+    sessions_analysis._launch_llm_call()
+    assert sessions_analysis.llm_message == "RateLimitError"
+
+def test_connection_error(sessions_analysis, mock_llm_client_connection_error):
+    sessions_analysis.llm_client = mock_llm_client_connection_error
+    sessions_analysis._launch_llm_call()
+    assert sessions_analysis.llm_message == "APIConnectionError"
 
 # sessions_analysis.llm_completion.usage.completion_tokens
 
