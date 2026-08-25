@@ -4,6 +4,12 @@ import sys
 import tkinter as tk
 from tkinter import ttk, simpledialog
 from pathlib import Path
+from analysis import SessionsAnalysis
+import threading
+import json
+
+KEYRING_SERVICE = "CocoClock"
+KEYRING_USERNAME = "openai_api_key"
 
 class GuiPomodoroTracker:
     def __init__(self, storage_path = None):
@@ -11,16 +17,36 @@ class GuiPomodoroTracker:
             self._compute_storage_path()
         else:
             self.storage_path = storage_path
+        self.api_storage_path = self.storage_path / "api_key.json"
         self.core = PomodoroTracker(self.storage_path)
         self.category_store = CategoryStore(self.storage_path)
         self.root = tk.Tk()
+        self.sessions_analysis = SessionsAnalysis(storage_path=self.storage_path, categories_dict=self.category_store.create_categories_dict(), api_key=self._get_api_key())
+        self.llm_thread_running = False
         self.root.title(f"Pomodorotracker V{self.core.version_number}")
-        self.previous_state = self.core.state
+        self.previous_state = "Startup"
         self.main_font = ("Helvetica", 15)
+        self.bold_font = ("Helvetica", 50, "bold")
+        self.sub_font = ("Helvetica", 12)
         self.display_time = "--:--"
         self.display_text = "Inactive"
-
+        self.llm_text = self.sessions_analysis.llm_message
+        self._update_token_count_text()
         self.active_categories = []
+
+        #Widget Set API Key and Token Count
+        llm_frame = tk.Frame(self.root)
+        self.set_api_key_button = tk.Button(llm_frame, text="Set OpenAI API key", command=self._set_api_key, font=self.sub_font)
+        self.set_api_key_button.grid(row=0,column=0, sticky=tk.W+tk.E)
+        self.token_count_label = tk.Label(llm_frame, text=self.token_count_text, font=self.sub_font)
+        self.token_count_label.grid(row=0,column=1, sticky=tk.W+tk.E)
+        llm_frame.pack(padx=5, pady=5)
+
+
+        # Widget llm report
+
+        self.llm_label = tk.Label(self.root, text=self.llm_text, font=self.main_font, wraplength=400)
+        self.llm_label.pack(padx=5,pady=5) 
 
 
         #Widget State
@@ -28,7 +54,7 @@ class GuiPomodoroTracker:
         self.state_label.pack(padx=5,pady=5)
 
         #Widget Time
-        self.time_label = tk.Label(self.root, text=self.core.remaining_seconds, font=self.main_font)
+        self.time_label = tk.Label(self.root, text=self.core.remaining_seconds, font=self.bold_font)
         self.time_label.pack(padx=5,pady=5)
 
         #Widget Category
@@ -47,8 +73,6 @@ class GuiPomodoroTracker:
         #Widget New Category
         self.new_categories_button = tk.Button(category_frame, text="Add new category", command = self._on_new_category, font=self.main_font)
         self.new_categories_button.pack(side=tk.LEFT, padx=5)
-    
-
         category_frame.pack(padx=5,pady=5)
 
 
@@ -66,10 +90,35 @@ class GuiPomodoroTracker:
         for column, [name, method] in enumerate(commands):
             button = tk.Button(buttonframe, text=name, command=self._make_handler(method), font=self.main_font)
             button.grid(row=0,column=column, sticky=tk.W+tk.E)
+
         
         buttonframe.pack(padx=5, pady=5)
         self._refresh_categories()
         self._heartbeat()
+
+    def _set_api_key(self):
+        key_input = simpledialog.askstring("Set OpenAI API key", "OpenAI API key:")
+        if key_input is None:
+            return
+        if not key_input.strip():
+            return
+        try:
+            self.sessions_analysis.api_key = key_input
+            key = {}
+            key["OPENAI_API_KEY"] = key_input
+            self.api_storage_path.write_text(json.dumps(key))
+        except Exception as err:
+            self.llm_text = str(err)
+
+
+        self.sessions_analysis.setup_llm()
+        self._request_llm_update()
+
+    def _get_api_key(self):
+        if self.api_storage_path.exists():
+            data = json.loads(self.api_storage_path.read_text())
+            return data["OPENAI_API_KEY"]
+
 
     def _on_new_category(self):
         name = simpledialog.askstring("New category", "Name:")
@@ -80,7 +129,36 @@ class GuiPomodoroTracker:
         self.category_store.create_new_category(name)
         self.category_store.save_categories()
         self._refresh_categories()
-        
+
+    def _check_for_llm_update(self):
+        if self.core.state != self.previous_state and self.core.state == "break" or self.previous_state == "Startup":
+            self._request_llm_update()
+
+    def _request_llm_update(self):
+            if not self.llm_thread_running:
+                self.llm_thread_running = True
+                threading.Thread(target=self._initiate_llm_update).start()
+
+
+
+    def _initiate_llm_update(self):
+        self.sessions_analysis.update_sessions_analysis()
+        self.sessions_analysis.update_llm_message()
+        self.llm_thread_running = False
+
+    def _update_token_count_text(self):
+        self.token_count_text= f"Total completion tokens: {self.sessions_analysis.used_completion_tokens}\nTotal prompt tokens: {self.sessions_analysis.used_prompt_tokens}"
+
+
+    def _poll_llm_message(self):
+        if self.llm_text != self.sessions_analysis.llm_message:
+            self._update_llm_display()
+
+    def _update_llm_display(self):
+        self.llm_text = self.sessions_analysis.llm_message
+        self.llm_label.config(text=self.llm_text)
+        self._update_token_count_text()
+        self.token_count_label.config(text=self.token_count_text)
 
     def _get_combobox_values(self):
         """Returns the category names, with '- none -' as the uncategorised option."""
@@ -103,14 +181,14 @@ class GuiPomodoroTracker:
                     return id
 
     def _refresh_categories(self):
-        """Updates all occurences of categories in the gui."""
+        """Updates acll occurences of categories in the gui."""
         self._update_active_categories()
         self.categories_combobox["values"] = self._get_combobox_values()
 
     def _update_active_categories(self):
         """Attributes to self a filtered list of non-merged pairs of id and name of the categories."""
         self.active_categories = [(c.id, c.name) for c in self.category_store.categories.values()  if c.merged_into is None]
-    
+        
     def _make_handler(self,method):
         def handler():
             self.core.update_time()
@@ -132,7 +210,7 @@ class GuiPomodoroTracker:
         if self.core.state == "inactive":
             self.display_text = "No work session active"
         elif self.core.state == "work":
-            self.display_text = f"{(self.core.pomodoro_length_sec/60):.2f} min work session"
+            self.display_text = f"{(self.core.pomodoro_length_sec/60):.2f}min work session"
         elif self.core.state == "break":
             self.display_text = f"{(self.core.break_length_sec/60):.2f}min break session"
         elif self.core.state == "break_overtime":
@@ -153,10 +231,12 @@ class GuiPomodoroTracker:
    
 
     def _render(self):
+        self._check_for_llm_update()
+        self._poll_llm_message()
         self._format_text()
-        self.state_label.config(text=self.display_text, font=self.main_font)
+        self.state_label.config(text=self.display_text)
         self._format_time()
-        self.time_label.config(text=self.display_time, font=self.main_font)
+        self.time_label.config(text=self.display_time)
 
         if self.core.state != self.previous_state:
             self.root.bell()

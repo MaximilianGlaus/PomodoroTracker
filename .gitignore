@@ -9,7 +9,7 @@ __pycache__/
 *.pyc
 
 # Runtime data (personal session log, not source)
-session_storage.csv
+sessions.csv
 category_storage.json
 
 # Build artifacts (PyInstaller)

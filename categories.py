@@ -11,16 +11,16 @@ class CategoryStore:
         """Initializes the categroy store."""
         self.ids_saved = 0
         self.categories = {}
-        self.storage_path = storage_path / "category_storage.json"
+        self.category_storage_path = storage_path / "category_storage.json"
         self.load_categories()
 
     def save_categories(self):
         data = [asdict(c) for c in self.categories.values()]
-        self.storage_path.write_text(json.dumps(data))
+        self.category_storage_path.write_text(json.dumps(data))
 
     def load_categories(self):
-        if self.storage_path.exists():
-            data = json.loads(self.storage_path.read_text())
+        if self.category_storage_path.exists():
+            data = json.loads(self.category_storage_path.read_text())
             self.categories = {d["id"]:Category(**d) for d in data}
             self.ids_saved = (max(self.categories.keys())+1)
 
@@ -55,6 +55,14 @@ class CategoryStore:
         self.ids_saved += 1
         return new_id
 
+    def create_categories_dict(self):
+        categories_dict = {}
+        for n in range(self.ids_saved):
+            categories_dict[n] = self.categories[self.resolve(n)].name
+        return categories_dict
+                
+
+        
 
 
 @dataclass
@@ -72,6 +80,7 @@ class Category:
 
 
 def main():
+    Path("/tmp/pomodoro-dev").mkdir(parents=True, exist_ok=True)
     category_store = CategoryStore()
     category_store.create_new_category("first_category")
     category_store.create_new_category("second_category")   
@@ -79,11 +88,7 @@ def main():
     category_store.create_new_category("fourth_category") 
     category_store.merge_category(0, 1)
     category_store.save_categories()
-    print(category_store.storage_path.parent)
-    
-    fresh_category_store = CategoryStore()
-    fresh_category_store.load_categories
-    print(fresh_category_store.categories[0].name)
+    category_store.create_categories_dict()
 
 
 
